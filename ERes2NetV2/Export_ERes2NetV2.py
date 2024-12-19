@@ -14,7 +14,7 @@ from STFT_Process import STFT_Process  # The custom STFT/ISTFT can be exported i
 model_path = "/home/DakeQQ/Downloads/speech_eres2netv2_sv_zh-cn_16k-common"       # The ERes2NetV2 download path.
 onnx_model_A = "/home/DakeQQ/Downloads/ERes2NetV2_ONNX/ERes2NetV2.onnx"           # The exported onnx model path.
 modified_path = './modeling_modified/ERes2NetV2.py'
-python_modelscope_package_path = '/home/iamj/anaconda3/envs/python_312/lib/python3.12/site-packages/modelscope/models/audio/sv/ERes2NetV2.py'                   # The Python package path.
+python_modelscope_package_path = '/home/DakeQQ/anaconda3/envs/python_312/lib/python3.12/site-packages/modelscope/models/audio/sv/ERes2NetV2.py'                   # The Python package path.
 test_audio = [model_path + "/examples/speaker2_a_cn_16k.wav", model_path + "/examples/speaker1_a_cn_16k.wav", model_path + "/examples/speaker1_b_cn_16k.wav"]   # The test audio list.
 
 
