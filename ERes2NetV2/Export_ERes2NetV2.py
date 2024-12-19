@@ -125,12 +125,18 @@ out_name_A0 = out_name_A[0].name
 out_name_A1 = out_name_A[1].name
 out_name_A2 = out_name_A[2].name
 
+
 # Load the input audio
 num_speakers = np.array([1], dtype=np.int64)  # At least 1.
-if "float16" in model_type:
-    saved_embed = np.zeros((MAX_SPEAKERS, HIDDEN_SIZE), dtype=np.float16)
+if isinstance(shape_value_in, str):
+    saved_embed = np.zeros((2, HIDDEN_SIZE), dtype=np.float32)
+    empty_space = np.zeros((1, HIDDEN_SIZE), dtype=np.float32)
 else:
     saved_embed = np.zeros((MAX_SPEAKERS, HIDDEN_SIZE), dtype=np.float32)
+if "float16" in model_type:
+    saved_embed = saved_embed.astype(np.float16)
+    if isinstance(shape_value_in, str):
+        empty_space = empty_space.astype(np.float16)
 for test in test_audio:
     print("----------------------------------------------------------------------------------------------------------")
     print(f"\nTest Input Audio: {test}")
@@ -183,4 +189,6 @@ for test in test_audio:
             saved_embed[num_speakers] = embed
             print(f"\nIt's an unknown speaker. Assign it a new ID = {num_speakers[0]}\n\nTime Cost: {end_time - start_time:.3f} Seconds\n")
             num_speakers += 1
+            if isinstance(shape_value_in, str):
+                saved_embed = np.concatenate((saved_embed, empty_space), axis=0)
         print("----------------------------------------------------------------------------------------------------------")
