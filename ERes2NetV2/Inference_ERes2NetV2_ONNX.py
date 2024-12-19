@@ -55,6 +55,7 @@ if isinstance(shape_value_in, str):
     empty_space = np.zeros((1, HIDDEN_SIZE), dtype=np.float32)
 else:
     saved_embed = np.zeros((MAX_SPEAKERS, HIDDEN_SIZE), dtype=np.float32)
+    empty_space = None
 if "float16" in model_type:
     saved_embed = saved_embed.astype(np.float16)
     if isinstance(shape_value_in, str):
