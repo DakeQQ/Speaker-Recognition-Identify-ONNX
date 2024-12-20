@@ -13,8 +13,6 @@ ORT_Accelerate_Providers = []           # If you have accelerate devices for : [
                                         # else keep empty.
 SAMPLE_RATE = 16000                     # The model parameter, do not edit the value.
 SLIDING_WINDOW = 0                      # Set the sliding window step for test audio reading; use 0 to disable.
-MAX_SPEAKERS = 10                       # Maximum number of saved speaker features.
-HIDDEN_SIZE = 192                       # Model hidden size. Do not edit it.
 SIMILARITY_THRESHOLD = 0.4              # Threshold to determine the speaker's identity.
 
 
@@ -48,18 +46,20 @@ out_name_A1 = out_name_A[1].name
 out_name_A2 = out_name_A[2].name
 
 
-# Load the input audio
 num_speakers = np.array([1], dtype=np.int64)  # At least 1.
 if isinstance(shape_value_in, str):
-    saved_embed = np.zeros((2, HIDDEN_SIZE), dtype=np.float32)  # At least 2.
-    empty_space = np.zeros((1, HIDDEN_SIZE), dtype=np.float32)
+    saved_embed = np.zeros((2, ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)  # At least 2.
+    empty_space = np.zeros((1, ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)
 else:
-    saved_embed = np.zeros((MAX_SPEAKERS, HIDDEN_SIZE), dtype=np.float32)
+    saved_embed = np.zeros((ort_session_A._inputs_meta[2].shape[0], ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)
     empty_space = None
 if "float16" in model_type:
     saved_embed = saved_embed.astype(np.float16)
     if isinstance(shape_value_in, str):
         empty_space = empty_space.astype(np.float16)
+
+
+# Load the input audio
 for test in test_audio:
     print("----------------------------------------------------------------------------------------------------------")
     print(f"\nTest Input Audio: {test}")
