@@ -4,7 +4,7 @@
 Leverage ONNX Runtime for efficient speaker role identification.
 
 ### Supported Models  
-1. **Single Models**:  
+1. **Models**:  
    - [ERes2NetV2](https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common/summary)  
    - [ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common)  
 
@@ -34,7 +34,7 @@ Leverage ONNX Runtime for efficient speaker role identification.
 使用 ONNX Runtime 高效实现角色说话人识别。
 
 ### 支持模型  
-1. **单模型**：  
+1. **模型**：  
    - [ERes2NetV2](https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common/summary)  
    - [ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common)  
 
