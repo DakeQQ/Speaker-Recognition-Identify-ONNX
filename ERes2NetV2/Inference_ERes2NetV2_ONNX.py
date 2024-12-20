@@ -39,15 +39,17 @@ in_name_A0 = in_name_A[0].name
 in_name_A1 = in_name_A[1].name
 if isinstance(shape_value_in, str):
     in_name_A2 = None
+    dynamic_axes = True
 else:
     in_name_A2 = in_name_A[2].name
+    dynamic_axes = False
 out_name_A0 = out_name_A[0].name
 out_name_A1 = out_name_A[1].name
 out_name_A2 = out_name_A[2].name
 
 
 num_speakers = np.array([1], dtype=np.int64)  # At least 1.
-if isinstance(shape_value_in, str):
+if dynamic_axes:
     saved_embed = np.zeros((2, ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)  # At least 2.
     empty_space = np.zeros((1, ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)
 else:
@@ -55,7 +57,7 @@ else:
     empty_space = None
 if "float16" in model_type:
     saved_embed = saved_embed.astype(np.float16)
-    if isinstance(shape_value_in, str):
+    if dynamic_axes:
         empty_space = empty_space.astype(np.float16)
 
 
@@ -70,7 +72,7 @@ for test in test_audio:
         if "float16" in model_type:
             audio = audio.astype(np.float16)
     audio = audio.reshape(1, 1, -1)
-    if isinstance(shape_value_in, str):
+    if dynamic_axes:
         INPUT_AUDIO_LENGTH = min(160000, audio_len)  # Default to 10 seconds audio, You can Adjust it.
     else:
         INPUT_AUDIO_LENGTH = shape_value_in
@@ -99,7 +101,7 @@ for test in test_audio:
                     in_name_A0: audio[:, :, slice_start: slice_end],
                     in_name_A1: saved_embed
                 }
-        if isinstance(shape_value_in, int):
+        if not dynamic_axes:
             input_feed[in_name_A2] = num_speakers
         target_idx, score, embed = ort_session_A.run([out_name_A0, out_name_A1, out_name_A2], input_feed)
         end_time = time.time()
@@ -112,6 +114,6 @@ for test in test_audio:
             saved_embed[num_speakers] = embed
             print(f"\nIt's an unknown speaker. Assign it a new ID = {num_speakers[0]}\n\nTime Cost: {end_time - start_time:.3f} Seconds\n")
             num_speakers += 1
-            if isinstance(shape_value_in, str):
+            if dynamic_axes:
                 saved_embed = np.concatenate((saved_embed, empty_space), axis=0)
         print("----------------------------------------------------------------------------------------------------------")
