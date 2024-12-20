@@ -4,9 +4,8 @@
 Leverage ONNX Runtime for efficient speaker role identification.
 
 ### Supported Models  
-1. **Models**:  
-   - [ERes2NetV2](https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common/summary)  
-   - [ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common)  
+- [ERes2NetV2](https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common/summary)  
+- [ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common)  
 
 ### Features  
 - End-to-end speaker recognition with built-in `STFT` processing.  
@@ -34,9 +33,8 @@ Leverage ONNX Runtime for efficient speaker role identification.
 使用 ONNX Runtime 高效实现角色说话人识别。
 
 ### 支持模型  
-1. **模型**：  
-   - [ERes2NetV2](https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common/summary)  
-   - [ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common)  
+- [ERes2NetV2](https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common/summary)  
+- [ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common)  
 
 ### 功能特点  
 - 端到端说话人识别，内置 `STFT` 处理。  
