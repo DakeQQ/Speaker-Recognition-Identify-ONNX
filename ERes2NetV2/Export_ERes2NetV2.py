@@ -22,11 +22,11 @@ ORT_Accelerate_Providers = []                               # If you have accele
                                                             # else keep empty.
 DYNAMIC_AXES = False                                        # The default dynamic_axes is the input audio length. Note that some providers only support static axes.
 USE_PCM_INT16 = False                                       # Enable it, if the audio input is PCM wav data with dtype int16 (short).
-INPUT_AUDIO_LENGTH = 128000 if not DYNAMIC_AXES else 16000  # Set for static axis export: the length of the audio input signal (in samples).
+INPUT_AUDIO_LENGTH = 128000 if not DYNAMIC_AXES else 81960  # Set for static axis export: the length of the audio input signal (in samples). Iy use DYNAMIC_AXES, Default to 81960, you can adjust it.
 WINDOW_TYPE = 'kaiser'                                      # Type of window function used in the STFT
 N_MELS = 80                                                 # Number of Mel bands to generate in the Mel-spectrogram, edit it carefully.
 NFFT = 512                                                  # Number of FFT components for the STFT process, edit it carefully.
-HOP_LENGTH = 150                                            # Number of samples between successive frames in the STFT, edit it carefully.
+HOP_LENGTH = 160                                            # Number of samples between successive frames in the STFT, edit it carefully.
 SAMPLE_RATE = 16000                                         # The model parameter, do not edit the value.
 PRE_EMPHASIZE = 0.97                                        # For audio preprocessing.
 SLIDING_WINDOW = 0                                          # Set the sliding window step for test audio reading; use 0 to disable.
@@ -153,7 +153,7 @@ for test in test_audio:
             audio = audio.astype(np.float16)
     audio = audio.reshape(1, 1, -1)
     if dynamic_axes:
-        INPUT_AUDIO_LENGTH = min(160000, audio_len)  # Default to 10 seconds audio, You can Adjust it.
+        INPUT_AUDIO_LENGTH = min(81960, audio_len)  # Default to 5 seconds audio, You can adjust it.
     else:
         INPUT_AUDIO_LENGTH = shape_value_in
     if SLIDING_WINDOW <= 0:
