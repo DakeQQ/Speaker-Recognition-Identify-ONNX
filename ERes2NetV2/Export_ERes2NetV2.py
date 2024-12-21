@@ -15,14 +15,13 @@ model_path = "/home/DakeQQ/Downloads/speech_eres2netv2_sv_zh-cn_16k-common"     
 onnx_model_A = "/home/DakeQQ/Downloads/ERes2NetV2_ONNX/ERes2NetV2.onnx"           # The exported onnx model path.
 modified_path = './modeling_modified/ERes2NetV2.py'
 python_modelscope_package_path = '/home/DakeQQ/anaconda3/envs/python_312/lib/python3.12/site-packages/modelscope/models/audio/sv/ERes2NetV2.py'                   # The Python package path.
-test_audio = [model_path + "/examples/speaker2_a_cn_16k.wav", model_path + "/examples/speaker1_a_cn_16k.wav", model_path + "/examples/speaker1_b_cn_16k.wav"]   # The test audio list.
+test_audio = [model_path + "/examples/speaker2_a_cn_16k.wav", model_path + "/examples/speaker1_a_cn_16k.wav", model_path + "/examples/speaker1_b_cn_16k.wav"]     # The test audio list.
 
 
 ORT_Accelerate_Providers = []                               # If you have accelerate devices for : ['CUDAExecutionProvider', 'TensorrtExecutionProvider', 'CoreMLExecutionProvider', 'DmlExecutionProvider', 'OpenVINOExecutionProvider', 'ROCMExecutionProvider', 'MIGraphXExecutionProvider', 'AzureExecutionProvider']
                                                             # else keep empty.
 DYNAMIC_AXES = False                                        # The default dynamic_axes is the input audio length. Note that some providers only support static axes.
-USE_PCM_INT16 = False                                       # Enable it, if the audio input is PCM wav data with dtype int16 (short).
-INPUT_AUDIO_LENGTH = 128000 if not DYNAMIC_AXES else 81960  # Set for static axis export: the length of the audio input signal (in samples). Iy use DYNAMIC_AXES, Default to 81960, you can adjust it.
+INPUT_AUDIO_LENGTH = 96000 if not DYNAMIC_AXES else 163820  # Set for static axis export: the length of the audio input signal (in samples). Iy use DYNAMIC_AXES, Default to 163820, you can adjust it.
 WINDOW_TYPE = 'kaiser'                                      # Type of window function used in the STFT
 N_MELS = 80                                                 # Number of Mel bands to generate in the Mel-spectrogram, edit it carefully.
 NFFT = 512                                                  # Number of FFT components for the STFT process, edit it carefully.
@@ -30,7 +29,7 @@ HOP_LENGTH = 160                                            # Number of samples 
 SAMPLE_RATE = 16000                                         # The model parameter, do not edit the value.
 PRE_EMPHASIZE = 0.97                                        # For audio preprocessing.
 SLIDING_WINDOW = 0                                          # Set the sliding window step for test audio reading; use 0 to disable.
-MAX_SPEAKERS = 10                                           # Maximum number of saved speaker features.
+MAX_SPEAKERS = 50                                           # Maximum number of saved speaker features.
 HIDDEN_SIZE = 192                                           # Model hidden size. Do not edit it.
 SIMILARITY_THRESHOLD = 0.5                                  # Threshold to determine the speaker's identity.
 
@@ -39,20 +38,18 @@ shutil.copyfile(modified_path, python_modelscope_package_path)
 
 
 class ERES2NETV2(torch.nn.Module):
-    def __init__(self, eres2netv2, stft_model, nfft, n_mels, sample_rate, pre_emphasis, use_pcm_int16):
+    def __init__(self, eres2netv2, stft_model, nfft, n_mels, sample_rate, pre_emphasis):
         super(ERES2NETV2, self).__init__()
         self.eres2netv2 = eres2netv2
         self.stft_model = stft_model
-        self.use_pcm_int16 = use_pcm_int16
         self.pre_emphasis = pre_emphasis
         self.cos_similarity = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
         self.fbank = (torchaudio.functional.melscale_fbanks(nfft // 2 + 1, 20, 8000, n_mels, sample_rate, None,'htk')).transpose(0, 1).unsqueeze(0)
 
     def forward(self, audio, saved_embed, num_speakers):
-        if self.use_pcm_int16:
-            audio = self.inv_int16 * audio.float()
-        audio = torch.cat((audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]), dim=-1)  # Pre Emphasize
+        audio = audio.float()
         audio -= torch.mean(audio)  # Remove DC Offset
+        audio = torch.cat((audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]), dim=-1)  # Pre Emphasize
         real_part, imag_part = self.stft_model(audio, 'constant')
         mel_features = torch.matmul(self.fbank, real_part * real_part + imag_part * imag_part).clamp(min=1e-5).log()
         mel_features -= mel_features.mean(dim=1, keepdim=True)
@@ -70,8 +67,8 @@ with torch.inference_mode():
         disable_update=True,
         device="cpu",
     ).embedding_model.eval()
-    eres2netv2 = ERES2NETV2(model, custom_stft,  NFFT, N_MELS, SAMPLE_RATE, PRE_EMPHASIZE, USE_PCM_INT16)
-    audio = torch.ones((1, 1, INPUT_AUDIO_LENGTH), dtype=torch.int16 if USE_PCM_INT16 else torch.float32)
+    eres2netv2 = ERES2NETV2(model, custom_stft,  NFFT, N_MELS, SAMPLE_RATE, PRE_EMPHASIZE)
+    audio = torch.ones((1, 1, INPUT_AUDIO_LENGTH), dtype=torch.int16)
     saved_embed = torch.randn((MAX_SPEAKERS, HIDDEN_SIZE), dtype=torch.float32)
     num_speakers = torch.tensor([1], dtype=torch.int64)
     torch.onnx.export(
@@ -111,7 +108,7 @@ session_opts.add_session_config_entry("session.set_denormal_as_zero", "1")
 
 ort_session_A = onnxruntime.InferenceSession(onnx_model_A, sess_options=session_opts, providers=ORT_Accelerate_Providers)
 print(f"\nUsable Providers: {ort_session_A.get_providers()}")
-model_type = ort_session_A._inputs_meta[0].type
+model_type = ort_session_A._inputs_meta[1].type
 shape_value_in = ort_session_A._inputs_meta[0].shape[-1]
 in_name_A = ort_session_A.get_inputs()
 out_name_A = ort_session_A.get_outputs()
@@ -130,10 +127,10 @@ out_name_A2 = out_name_A[2].name
 
 num_speakers = np.array([1], dtype=np.int64)  # At least 1.
 if dynamic_axes:
-    saved_embed = np.zeros((2, ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)  # At least 2.
-    empty_space = np.zeros((1, ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)
+    saved_embed = np.zeros((2, ort_session_A._inputs_meta[1].shape[1]), dtype=np.float32)  # At least 2.
+    empty_space = np.zeros((1, ort_session_A._inputs_meta[1].shape[1]), dtype=np.float32)
 else:
-    saved_embed = np.zeros((ort_session_A._inputs_meta[2].shape[0], ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)
+    saved_embed = np.zeros((ort_session_A._inputs_meta[1].shape[0], ort_session_A._inputs_meta[1].shape[1]), dtype=np.float32)
     empty_space = None
 if "float16" in model_type:
     saved_embed = saved_embed.astype(np.float16)
@@ -147,13 +144,9 @@ for test in test_audio:
     print(f"\nTest Input Audio: {test}")
     audio = np.array(AudioSegment.from_file(test).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples())
     audio_len = len(audio)
-    if "int16" not in model_type:
-        audio = audio.astype(np.float32) / 32768.0
-        if "float16" in model_type:
-            audio = audio.astype(np.float16)
     audio = audio.reshape(1, 1, -1)
     if dynamic_axes:
-        INPUT_AUDIO_LENGTH = min(81960, audio_len)  # Default to 5 seconds audio, You can adjust it.
+        INPUT_AUDIO_LENGTH = min(163820, audio_len)  # Default to 10 seconds audio, You can adjust it.
     else:
         INPUT_AUDIO_LENGTH = shape_value_in
     if SLIDING_WINDOW <= 0:
