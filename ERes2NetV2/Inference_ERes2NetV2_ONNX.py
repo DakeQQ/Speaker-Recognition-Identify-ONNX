@@ -13,7 +13,7 @@ ORT_Accelerate_Providers = []           # If you have accelerate devices for : [
                                         # else keep empty.
 SAMPLE_RATE = 16000                     # The model parameter, do not edit the value.
 SLIDING_WINDOW = 0                      # Set the sliding window step for test audio reading; use 0 to disable.
-SIMILARITY_THRESHOLD = 0.4              # Threshold to determine the speaker's identity.
+SIMILARITY_THRESHOLD = 0.5              # Threshold to determine the speaker's identity.
 
 
 # ONNX Runtime settings
@@ -73,7 +73,7 @@ for test in test_audio:
             audio = audio.astype(np.float16)
     audio = audio.reshape(1, 1, -1)
     if dynamic_axes:
-        INPUT_AUDIO_LENGTH = min(160000, audio_len)  # Default to 10 seconds audio, You can Adjust it.
+        INPUT_AUDIO_LENGTH = min(81960, audio_len)  # Default to 5 seconds audio, You can adjust it.
     else:
         INPUT_AUDIO_LENGTH = shape_value_in
     if SLIDING_WINDOW <= 0:
