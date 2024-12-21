@@ -32,7 +32,7 @@ PRE_EMPHASIZE = 0.97                                        # For audio preproce
 SLIDING_WINDOW = 0                                          # Set the sliding window step for test audio reading; use 0 to disable.
 MAX_SPEAKERS = 10                                           # Maximum number of saved speaker features.
 HIDDEN_SIZE = 192                                           # Model hidden size. Do not edit it.
-SIMILARITY_THRESHOLD = 0.4                                  # Threshold to determine the speaker's identity.
+SIMILARITY_THRESHOLD = 0.5                                  # Threshold to determine the speaker's identity.
 
 
 shutil.copyfile(modified_path, python_modelscope_package_path)
