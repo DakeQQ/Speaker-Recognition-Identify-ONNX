@@ -4,8 +4,8 @@ import onnxruntime
 from pydub import AudioSegment
 
 
-model_path = "/home/DakeQQ/Downloads/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common"           # The SenseVoice download path.
-onnx_model_A = "/home/DakeQQ/Downloads/ERes2NetV2_Optimized/ERes2NetV2.ort"                   # The exported onnx model path.
+model_path = "/home/DakeQQ/Downloads/speech_eres2netv2_sv_zh-cn_16k-common"           # The SenseVoice download path.
+onnx_model_A = "/home/DakeQQ/Downloads/ERes2NetV2_Optimized/ERes2NetV2.ort"           # The exported onnx model path.
 test_audio = [model_path + "/examples/speaker2_a_cn_16k.wav", model_path + "/examples/speaker1_a_cn_16k.wav", model_path + "/examples/speaker1_b_cn_16k.wav"]   # The test audio list.
 
 
@@ -31,7 +31,7 @@ session_opts.add_session_config_entry("session.set_denormal_as_zero", "1")
 
 ort_session_A = onnxruntime.InferenceSession(onnx_model_A, sess_options=session_opts, providers=ORT_Accelerate_Providers)
 print(f"\nUsable Providers: {ort_session_A.get_providers()}")
-model_type = ort_session_A._inputs_meta[0].type
+model_type = ort_session_A._inputs_meta[1].type
 shape_value_in = ort_session_A._inputs_meta[0].shape[-1]
 in_name_A = ort_session_A.get_inputs()
 out_name_A = ort_session_A.get_outputs()
@@ -50,10 +50,10 @@ out_name_A2 = out_name_A[2].name
 
 num_speakers = np.array([1], dtype=np.int64)  # At least 1.
 if dynamic_axes:
-    saved_embed = np.zeros((2, ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)  # At least 2.
-    empty_space = np.zeros((1, ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)
+    saved_embed = np.zeros((2, ort_session_A._inputs_meta[1].shape[1]), dtype=np.float32)  # At least 2.
+    empty_space = np.zeros((1, ort_session_A._inputs_meta[1].shape[1]), dtype=np.float32)
 else:
-    saved_embed = np.zeros((ort_session_A._inputs_meta[2].shape[0], ort_session_A._inputs_meta[2].shape[1]), dtype=np.float32)
+    saved_embed = np.zeros((ort_session_A._inputs_meta[1].shape[0], ort_session_A._inputs_meta[1].shape[1]), dtype=np.float32)
     empty_space = None
 if "float16" in model_type:
     saved_embed = saved_embed.astype(np.float16)
@@ -67,13 +67,9 @@ for test in test_audio:
     print(f"\nTest Input Audio: {test}")
     audio = np.array(AudioSegment.from_file(test).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples())
     audio_len = len(audio)
-    if "int16" not in model_type:
-        audio = audio.astype(np.float32) / 32768.0
-        if "float16" in model_type:
-            audio = audio.astype(np.float16)
     audio = audio.reshape(1, 1, -1)
     if dynamic_axes:
-        INPUT_AUDIO_LENGTH = min(81960, audio_len)  # Default to 5 seconds audio, You can adjust it.
+        INPUT_AUDIO_LENGTH = min(163820, audio_len)  # Default to 5 seconds audio, You can adjust it.
     else:
         INPUT_AUDIO_LENGTH = shape_value_in
     if SLIDING_WINDOW <= 0:
