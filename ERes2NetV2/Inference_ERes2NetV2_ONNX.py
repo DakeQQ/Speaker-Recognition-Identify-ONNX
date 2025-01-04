@@ -69,7 +69,7 @@ for test in test_audio:
     audio_len = len(audio)
     audio = audio.reshape(1, 1, -1)
     if dynamic_axes:
-        INPUT_AUDIO_LENGTH = min(163820, audio_len)  # Default to 5 seconds audio, You can adjust it.
+        INPUT_AUDIO_LENGTH = min(320000, audio_len)  # Default to 20 seconds audio, You can adjust it.
     else:
         INPUT_AUDIO_LENGTH = shape_value_in
     if SLIDING_WINDOW <= 0:
