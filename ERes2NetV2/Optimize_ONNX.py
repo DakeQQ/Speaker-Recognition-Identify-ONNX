@@ -13,22 +13,27 @@ original_folder_path = "/home/DakeQQ/Downloads/ERes2NetV2_ONNX"                 
 optimized_folder_path = "/home/DakeQQ/Downloads/ERes2NetV2_Optimized"                   # The optimized folder.
 model_path = os.path.join(original_folder_path, "ERes2NetV2.onnx")                      # The original fp32 model name.
 optimized_model_path = os.path.join(optimized_folder_path, "ERes2NetV2.onnx")           # The optimized model name.
-do_quantize = False
+do_quantize = True
 use_gpu_fp16 = False                                                                    # If true, the transformers.optimizer will remain the FP16 processes.
 provider = 'CPUExecutionProvider'                                                       # ['CPUExecutionProvider', 'CUDAExecutionProvider', 'CoreMLExecutionProvider', 'DmlExecutionProvider']
 target_platform = "amd64"                                                               # ['arm', 'amd64']; The 'amd64' means x86_64 desktop, not means the AMD chip.
 
 
-# Check model
-if isinstance(onnxruntime.InferenceSession(model_path)._inputs_meta[0].shape[-1], str):
-    DYNAMIC_AXES = True
-else:
-    DYNAMIC_AXES = False
+# ONNX Model Optimizer
+slim(
+    model=model_path,
+    output_model=optimized_model_path,
+    no_shape_infer=False,   # True for more optimize but may get errors.
+    skip_fusion_patterns=False,
+    no_constant_folding=False,
+    save_as_external_data=False,
+    verbose=False
+)
 
 
 if do_quantize:
     quantize_dynamic(
-        model_input=model_path,
+        model_input=optimized_model_path,
         model_output=optimized_model_path,
         per_channel=True,                                   # True for model accuracy but cost a lot of time during quanting process.
         reduce_range=False,                                 # True for some x86_64 platform.
@@ -44,18 +49,6 @@ if do_quantize:
     )
 
 
-# ONNX Model Optimizer
-slim(
-    model=optimized_model_path if do_quantize else model_path,
-    output_model=optimized_model_path,
-    no_shape_infer=True if DYNAMIC_AXES else False,   # True for more optimize but may get errors.
-    skip_fusion_patterns=False,
-    no_constant_folding=False,
-    save_as_external_data=False,
-    verbose=False
-)
-
-
 # transformers.optimizer
 model = optimize_model(optimized_model_path,
                        use_gpu=use_gpu_fp16,
@@ -69,7 +62,7 @@ if use_gpu_fp16:
     model.convert_float_to_float16(
         keep_io_types=False,
         force_fp16_initializers=True,
-        use_symbolic_shape_infer=False if DYNAMIC_AXES else True,  # True for more optimize but may get errors.
+        use_symbolic_shape_infer=True,  # True for more optimize but may get errors.
         op_block_list=['DynamicQuantizeLinear', 'DequantizeLinear', 'DynamicQuantizeMatMul', 'Range', 'MatMulIntegerToFloat']
     )
 model.save_model_to_file(optimized_model_path, use_external_data_format=False)
@@ -81,7 +74,7 @@ gc.collect()
 slim(
     model=optimized_model_path,
     output_model=optimized_model_path,
-    no_shape_infer=True if DYNAMIC_AXES else False,   # True for more optimize but may get errors.
+    no_shape_infer=False,   # True for more optimize but may get errors.
     skip_fusion_patterns=False,
     no_constant_folding=False,
     save_as_external_data=False,
