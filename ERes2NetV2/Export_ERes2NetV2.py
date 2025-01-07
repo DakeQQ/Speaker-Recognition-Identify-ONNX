@@ -33,7 +33,7 @@ HIDDEN_SIZE = 192                                           # Model hidden size.
 SIMILARITY_THRESHOLD = 0.5                                  # Threshold to determine the speaker's identity.
 
 
-shutil.copyfile('./modeling_modified/ERes2NetV2.py', site.getsitepackages()[0] + "/modelscope/models/audio/sv/ERes2NetV2.py")
+shutil.copyfile('./modeling_modified/ERes2NetV2.py', site.getsitepackages()[-1] + "/modelscope/models/audio/sv/ERes2NetV2.py")
 
 
 class ERES2NETV2(torch.nn.Module):
