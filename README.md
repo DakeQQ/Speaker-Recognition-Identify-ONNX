@@ -15,6 +15,9 @@ Leverage ONNX Runtime for efficient speaker role identification.
   - [Voice Activity Detection (VAD)](https://github.com/DakeQQ/Voice-Activity-Detection-VAD-ONNX)  
   - [Audio Denoiser](https://github.com/DakeQQ/Audio-Denoiser-ONNX)  
 
+### Downloads
+ - [Link](https://drive.google.com/drive/folders/1tm_i0HqjDJCKCXwCNV7rS5TW0WG4NcfW?usp=drive_link)
+
 ### Learn More  
 - Visit the [project overview](https://dakeqq.github.io/overview/) for additional details.
 
@@ -43,6 +46,9 @@ Leverage ONNX Runtime for efficient speaker role identification.
 - 推荐搭配以下工具，提升性能：  
   - [语音活动检测 (VAD)](https://github.com/DakeQQ/Voice-Activity-Detection-VAD-ONNX)  
   - [音频去噪](https://github.com/DakeQQ/Audio-Denoiser-ONNX)  
+
+### Downloads
+ - [Link](https://drive.google.com/drive/folders/1tm_i0HqjDJCKCXwCNV7rS5TW0WG4NcfW?usp=drive_link)
 
 ### 了解更多  
 - 访问[项目概览](https://dakeqq.github.io/overview/)获取更多信息。
