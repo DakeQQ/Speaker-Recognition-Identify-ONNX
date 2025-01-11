@@ -23,7 +23,7 @@ target_platform = "amd64"                                                       
 slim(
     model=model_path,
     output_model=optimized_model_path,
-    no_shape_infer=False,   # True for more optimize but may get errors.
+    no_shape_infer=False,   # False for more optimize but may get errors.
     skip_fusion_patterns=False,
     no_constant_folding=False,
     save_as_external_data=False,
@@ -74,7 +74,7 @@ gc.collect()
 slim(
     model=optimized_model_path,
     output_model=optimized_model_path,
-    no_shape_infer=False,   # True for more optimize but may get errors.
+    no_shape_infer=False,   # False for more optimize but may get errors.
     skip_fusion_patterns=False,
     no_constant_folding=False,
     save_as_external_data=False,
