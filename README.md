@@ -19,7 +19,7 @@ Leverage ONNX Runtime for efficient speaker role identification.
  - [Link](https://drive.google.com/drive/folders/1tm_i0HqjDJCKCXwCNV7rS5TW0WG4NcfW?usp=drive_link)
 
 ### Learn More  
-- Visit the [project overview](https://dakeqq.github.io/overview/) for additional details.
+- Visit the [project overview](https://github.com/DakeQQ?tab=repositories) for additional details.
 
 ---
 
@@ -51,6 +51,6 @@ Leverage ONNX Runtime for efficient speaker role identification.
  - [Link](https://drive.google.com/drive/folders/1tm_i0HqjDJCKCXwCNV7rS5TW0WG4NcfW?usp=drive_link)
 
 ### 了解更多  
-- 访问[项目概览](https://dakeqq.github.io/overview/)获取更多信息。
+- 访问[项目概览]([https://dakeqq.github.io/overview/](https://github.com/DakeQQ?tab=repositories))获取更多信息。
 
 ---
