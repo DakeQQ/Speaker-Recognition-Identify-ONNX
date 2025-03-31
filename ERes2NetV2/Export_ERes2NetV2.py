@@ -141,7 +141,7 @@ if "float16" in model_type:
 for test in test_audio:
     print("----------------------------------------------------------------------------------------------------------")
     print(f"\nTest Input Audio: {test}")
-    audio = np.array(AudioSegment.from_file(test).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples())
+    audio = np.array(AudioSegment.from_file(test).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples(), dtype=np.int16)
     audio_len = len(audio)
     audio = audio.reshape(1, 1, -1)
     if dynamic_axes:
