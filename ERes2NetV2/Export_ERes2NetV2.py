@@ -43,7 +43,7 @@ class ERES2NETV2(torch.nn.Module):
         self.stft_model = stft_model
         self.pre_emphasis = pre_emphasis
         self.cos_similarity = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
-        self.fbank = (torchaudio.functional.melscale_fbanks(nfft // 2 + 1, 20, 8000, n_mels, sample_rate, None,'htk')).transpose(0, 1).unsqueeze(0)
+        self.fbank = (torchaudio.functional.melscale_fbanks(nfft // 2 + 1, 20, sample_rate // 2, n_mels, sample_rate, None,'htk')).transpose(0, 1).unsqueeze(0)
 
     def forward(self, audio, saved_embed, num_speakers):
         audio = audio.float()
@@ -51,7 +51,7 @@ class ERES2NETV2(torch.nn.Module):
         audio = torch.cat((audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]), dim=-1)  # Pre Emphasize
         real_part, imag_part = self.stft_model(audio, 'constant')
         mel_features = torch.matmul(self.fbank, real_part * real_part + imag_part * imag_part).clamp(min=1e-5).log()
-        mel_features -= mel_features.mean(dim=1, keepdim=True)
+        mel_features -= mel_features.mean(dim=-1, keepdim=True)
         embed = self.eres2netv2.forward(mel_features)
         score = self.cos_similarity(embed, saved_embed) if DYNAMIC_AXES else self.cos_similarity(embed, saved_embed[:num_speakers])
         score, target_idx = torch.max(score, dim=-1)
