@@ -95,8 +95,8 @@ while slice_end <= aligned_len:
 
 print(f"\nInference Time Cost: {time.time() - start_time:.3f} Seconds")
 if results:
-    print("\nSpeaker Change Found:")
+    print("\nSpeaker change found:")
     for i in results:
         print(f"\n  Change_Point = {i}")
 else:
-    print("\nNo Speaker Change.")
+    print("No speaker change detected.")
