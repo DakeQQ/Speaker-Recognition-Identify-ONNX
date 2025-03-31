@@ -30,6 +30,7 @@ Leverage ONNX Runtime for efficient speaker role identification and speaker chan
 |:----------------:|:----------:|:---------------------:|:---------------------------:|:--------------------------------------------------:|
 | Ubuntu 24.04     | Laptop     | CPU<br>i5-7300HQ     | ERes2NetV2<br>f32           | 0.056                                              |
 | Ubuntu 24.04     | Laptop     | CPU<br>i5-7300HQ     | ERes2NetV2<br>q8f32         | 0.066                                              |
+| Ubuntu 24.04     | Laptop     | CPU<br>i7-1165G7     | CAM++_Transformer<br>f32    | 0.01                                               |
 
 ---
 
