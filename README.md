@@ -1,7 +1,7 @@
 ---
 
 ## Speaker-Recognition-Identify-ONNX  
-Leverage ONNX Runtime for efficient speaker role identification and Speaker change detection.
+Leverage ONNX Runtime for efficient speaker role identification and speaker change detection.
 
 ### Supported Models  
 - [Speaker Identification - ERes2NetV2](https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common/summary)  
