@@ -162,7 +162,7 @@ while slice_end <= aligned_len:
         })
     if output_len != 0:
         speech_change_start = ((output[0] + bias) * sample_rate_factor).astype(np.int32)
-        results.append(speech_change_start)
+        results.append(speech_change_start + slice_start)
     slice_start += stride_step
     slice_end = slice_start + INPUT_AUDIO_LENGTH
 
