@@ -1,12 +1,12 @@
 ---
 
 ## Speaker-Recognition-Identify-ONNX  
-Leverage ONNX Runtime for efficient speaker role identification and Overlap speech detection.
+Leverage ONNX Runtime for efficient speaker role identification and Speaker change detection.
 
 ### Supported Models  
 - [Speaker Identification - ERes2NetV2](https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common/summary)  
 - [Speaker Identification -  ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common)
-- [Overlap Speech Detection - CAM++_Transformer](https://modelscope.cn/models/iic/speech_campplus-transformer_scl_zh-cn_16k-common)
+- [Speaker Change Detection - CAM++_Transformer](https://modelscope.cn/models/iic/speech_campplus-transformer_scl_zh-cn_16k-common)
 
 ### Features  
 - End-to-end speaker recognition with built-in `STFT` processing.  
@@ -34,12 +34,12 @@ Leverage ONNX Runtime for efficient speaker role identification and Overlap spee
 ---
 
 ### 说话人识别 ONNX  
-使用 ONNX Runtime 高效实现角色说话人识别。
+使用 ONNX Runtime 高效实现角色说话人识别 & 说话人转变点检测。
 
 ### 支持模型  
 - [说话人识别 - ERes2NetV2](https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common/summary)  
 - [说话人识别 - ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common)
-- [语音重叠检测 - CAM++_Transformer](https://modelscope.cn/models/iic/speech_campplus-transformer_scl_zh-cn_16k-common)
+- [说话人转变点检测 - CAM++_Transformer](https://modelscope.cn/models/iic/speech_campplus-transformer_scl_zh-cn_16k-common)
 
 ### 功能特点  
 - 端到端说话人识别，内置 `STFT` 处理。  
