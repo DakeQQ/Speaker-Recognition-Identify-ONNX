@@ -78,8 +78,7 @@ aligned_len = audio.shape[-1]
 slice_start = 0
 slice_end = INPUT_AUDIO_LENGTH
 sample_rate_factor = np.array([SAMPLE_RATE * 0.01], dtype=np.float32)
-bias_start = np.array([0.0], dtype=np.float32)  # Experience value
-bias_end = np.array([2.0], dtype=np.float32)    # Experience value
+bias = np.array([0.0], dtype=np.float32)  # Experience value
 results = []
 start_time = time.time()
 while slice_end <= aligned_len:
@@ -89,16 +88,15 @@ while slice_end <= aligned_len:
             in_name_A0: audio[:, :, slice_start: slice_end]
         })
     if output_len != 0:
-        overlap_start = ((output[0] + bias_start) * sample_rate_factor).astype(np.int32)
-        overlap_end = ((output[-1] + bias_end) * sample_rate_factor).astype(np.int32)
-        results.append((overlap_start, overlap_end))
+        speech_change_start = ((output[0] + bias) * sample_rate_factor).astype(np.int32)
+        results.append(speech_change_start)
     slice_start += stride_step
     slice_end = slice_start + INPUT_AUDIO_LENGTH
 
 print(f"\nInference Time Cost: {time.time() - start_time:.3f} Seconds")
 if results:
-    print("\nOverlap Speech Found:")
+    print("\nSpeaker Change Found:")
     for i in results:
-        print(f"\n  Start_Index = {i[0]}, End_Index = {i[1]}")
+        print(f"\n  Change_Point = {i}")
 else:
-    print("\nNo overlap speech detected.")
+    print("\nNo Speaker Change.")
