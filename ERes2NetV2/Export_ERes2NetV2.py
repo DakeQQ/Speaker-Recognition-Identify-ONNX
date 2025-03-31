@@ -50,7 +50,7 @@ class ERES2NETV2(torch.nn.Module):
         audio -= torch.mean(audio)  # Remove DC Offset
         audio = torch.cat((audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]), dim=-1)  # Pre Emphasize
         real_part, imag_part = self.stft_model(audio, 'constant')
-        mel_features = torch.matmul(self.fbank, real_part * real_part + imag_part * imag_part).clamp(min=1e-5, max=65504.0).log()
+        mel_features = torch.matmul(self.fbank, real_part * real_part + imag_part * imag_part).clamp(min=1e-5).log()
         mel_features -= mel_features.mean(dim=1, keepdim=True)
         embed = self.eres2netv2.forward(mel_features)
         score = self.cos_similarity(embed, saved_embed) if DYNAMIC_AXES else self.cos_similarity(embed, saved_embed[:num_speakers])
