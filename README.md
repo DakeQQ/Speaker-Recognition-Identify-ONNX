@@ -11,7 +11,7 @@ Leverage ONNX Runtime for efficient speaker role identification and speaker chan
 ### Features  
 - End-to-end speaker recognition with built-in `STFT` processing.  
   **Input**: Audio file  
-  **Output**: Speaker identification result / Speech overlap position.
+  **Output**: Speaker identification result / Speaker change position.
 - Suggested integrations for enhanced performance:  
   - [Voice Activity Detection (VAD)](https://github.com/DakeQQ/Voice-Activity-Detection-VAD-ONNX)  
   - [Audio Denoiser](https://github.com/DakeQQ/Audio-Denoiser-ONNX)  
@@ -45,7 +45,7 @@ Leverage ONNX Runtime for efficient speaker role identification and speaker chan
 ### 功能特点  
 - 端到端说话人识别，内置 `STFT` 处理。  
   **输入**：音频文件  
-  **输出**：说话人识别结果 / 语音重叠位置
+  **输出**：说话人识别结果 / 说话人转变点
 - 推荐搭配以下工具，提升性能：  
   - [语音活动检测 (VAD)](https://github.com/DakeQQ/Voice-Activity-Detection-VAD-ONNX)  
   - [音频去噪](https://github.com/DakeQQ/Audio-Denoiser-ONNX)  
