@@ -15,10 +15,10 @@ SAMPLE_RATE = 16000                                         # The model paramete
 SLIDING_WINDOW = 0                                          # Set the sliding window step for test audio reading; use 0 to disable.
 
 
-def normalize_to_int16(audio_int64):
-    max_val = np.max(np.abs(audio_int64.astype(np.float32)))
+def normalize_to_int16(audio):
+    max_val = np.max(np.abs(audio.astype(np.float32)))
     scaling_factor = 32767.0 / max_val if max_val > 0 else 1.0
-    return (audio_int64 * float(scaling_factor)).astype(np.int16)
+    return (audio * float(scaling_factor)).astype(np.int16)
 
 
 # ONNX Runtime settings
@@ -49,7 +49,7 @@ out_name_A1 = out_name_A[1].name
 
 # Load the input audio
 print(f"\nTest Input Audio: {test_audio}")
-audio = np.array(AudioSegment.from_file(test_audio).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples(), dtype=np.int64)
+audio = np.array(AudioSegment.from_file(test_audio).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples(), dtype=np.int32)
 audio = normalize_to_int16(audio)
 audio_len = len(audio)
 audio = audio.reshape(1, 1, -1)
