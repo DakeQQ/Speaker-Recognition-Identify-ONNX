@@ -36,10 +36,10 @@ shutil.copyfile('./modeling_modified/ERes2NetV2.py', site.getsitepackages()[-1] 
 from modelscope.models.base import Model
 
 
-def normalize_to_int16(audio_int64):
-    max_val = np.max(np.abs(audio_int64.astype(np.float32)))
+def normalize_to_int16(audio):
+    max_val = np.max(np.abs(audio.astype(np.float32)))
     scaling_factor = 32767.0 / max_val if max_val > 0 else 1.0
-    return (audio_int64 * float(scaling_factor)).astype(np.int16)
+    return (audio * float(scaling_factor)).astype(np.int16)
 
 
 class ERES2NETV2(torch.nn.Module):
@@ -148,7 +148,7 @@ if "float16" in model_type:
 for test in test_audio:
     print("----------------------------------------------------------------------------------------------------------")
     print(f"\nTest Input Audio: {test}")
-    audio = np.array(AudioSegment.from_file(test).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples(), dtype=np.int64)
+    audio = np.array(AudioSegment.from_file(test).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples(), dtype=np.int32)
     audio = normalize_to_int16(audio)
     audio_len = len(audio)
     audio = audio.reshape(1, 1, -1)
