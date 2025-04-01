@@ -29,11 +29,17 @@ SAMPLE_RATE = 16000                                         # The model paramete
 PRE_EMPHASIZE = 0.97                                        # For audio preprocessing.
 SLIDING_WINDOW = 0                                          # Set the sliding window step for test audio reading; use 0 to disable.
 MAX_SPEAKERS = 50                                           # Maximum number of saved speaker features.
-HIDDEN_SIZE = 192                                           # Model hidden size. Do not edit it.
 SIMILARITY_THRESHOLD = 0.5                                  # Threshold to determine the speaker's identity.
 
 
 shutil.copyfile('./modeling_modified/ERes2NetV2.py', site.getsitepackages()[-1] + "/modelscope/models/audio/sv/ERes2NetV2.py")
+from modelscope.models.base import Model
+
+
+def normalize_to_int16(audio_int64):
+    max_val = np.max(np.abs(audio_int64.astype(np.float32)))
+    scaling_factor = 32767.0 / max_val if max_val > 0 else 1.0
+    return (audio_int64 * float(scaling_factor)).astype(np.int16)
 
 
 class ERES2NETV2(torch.nn.Module):
@@ -60,7 +66,7 @@ class ERES2NETV2(torch.nn.Module):
 
 print('\nExport start ...\n')
 with torch.inference_mode():
-    custom_stft = STFT_Process(model_type='stft_B', n_fft=NFFT, n_mels=N_MELS, hop_len=HOP_LENGTH, max_frames=0, window_type=WINDOW_TYPE).eval()  # The max_frames is not the key parameter for STFT, but it is for ISTFT.
+    custom_stft = STFT_Process(model_type='stft_B', n_fft=NFFT, hop_len=HOP_LENGTH, max_frames=0, window_type=WINDOW_TYPE).eval()  # The max_frames is not the key parameter for STFT, but it is for ISTFT.
     model = Model.from_pretrained(
         model_name_or_path=model_path,
         disable_update=True,
@@ -68,7 +74,7 @@ with torch.inference_mode():
     ).embedding_model.eval()
     eres2netv2 = ERES2NETV2(model, custom_stft,  NFFT, N_MELS, SAMPLE_RATE, PRE_EMPHASIZE)
     audio = torch.ones((1, 1, INPUT_AUDIO_LENGTH), dtype=torch.int16)
-    saved_embed = torch.randn((MAX_SPEAKERS, HIDDEN_SIZE), dtype=torch.float32)
+    saved_embed = torch.randn((MAX_SPEAKERS, model.embed_dim), dtype=torch.float32)
     num_speakers = torch.tensor([1], dtype=torch.int64)
     torch.onnx.export(
         eres2netv2,
@@ -141,7 +147,8 @@ if "float16" in model_type:
 for test in test_audio:
     print("----------------------------------------------------------------------------------------------------------")
     print(f"\nTest Input Audio: {test}")
-    audio = np.array(AudioSegment.from_file(test).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples(), dtype=np.int16)
+    audio = np.array(AudioSegment.from_file(test).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples(), dtype=np.int64)
+    audio = normalize_to_int16(audio)
     audio_len = len(audio)
     audio = audio.reshape(1, 1, -1)
     if dynamic_axes:
