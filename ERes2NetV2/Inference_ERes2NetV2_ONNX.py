@@ -16,6 +16,12 @@ SLIDING_WINDOW = 0                      # Set the sliding window step for test a
 SIMILARITY_THRESHOLD = 0.5              # Threshold to determine the speaker's identity.
 
 
+def normalize_to_int16(audio_int64):
+    max_val = np.max(np.abs(audio_int64.astype(np.float32)))
+    scaling_factor = 32767.0 / max_val if max_val > 0 else 1.0
+    return (audio_int64 * float(scaling_factor)).astype(np.int16)
+
+
 # ONNX Runtime settings
 session_opts = onnxruntime.SessionOptions()
 session_opts.log_severity_level = 3         # error level, it an adjustable value.
@@ -65,7 +71,8 @@ if "float16" in model_type:
 for test in test_audio:
     print("----------------------------------------------------------------------------------------------------------")
     print(f"\nTest Input Audio: {test}")
-    audio = np.array(AudioSegment.from_file(test).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples(), dtype=np.int16)
+    audio = np.array(AudioSegment.from_file(test).set_channels(1).set_frame_rate(SAMPLE_RATE).get_array_of_samples(), dtype=np.int64)
+    audio = normalize_to_int16(audio)
     audio_len = len(audio)
     audio = audio.reshape(1, 1, -1)
     if dynamic_axes:
