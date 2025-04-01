@@ -50,9 +50,10 @@ class ERES2NETV2(torch.nn.Module):
         self.pre_emphasis = pre_emphasis
         self.cos_similarity = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
         self.fbank = (torchaudio.functional.melscale_fbanks(nfft // 2 + 1, 20, sample_rate // 2, n_mels, sample_rate, None,'htk')).transpose(0, 1).unsqueeze(0)
+        self.inv_int16 = float(1.0 / 32768.0)
 
     def forward(self, audio, saved_embed, num_speakers):
-        audio = audio.float()
+        audio = audio.float() * self.inv_int16
         audio -= torch.mean(audio)  # Remove DC Offset
         audio = torch.cat((audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]), dim=-1)  # Pre Emphasize
         real_part, imag_part = self.stft_model(audio, 'constant')
