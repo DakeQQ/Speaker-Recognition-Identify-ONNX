@@ -186,7 +186,7 @@ sample_rate_factor = np.array([SAMPLE_RATE * 0.01], dtype=np.float32)
 bias = np.array([0.0], dtype=np.float32)  # Experience value
 voice_embed_x = np.zeros((1, 1, VOICE_EMBED_DIM), dtype=np.float32)   # You can modify this with the outputs from the ERes2Net model.
 voice_embed_y = np.zeros((1, 1, VOICE_EMBED_DIM), dtype=np.float32)   # You can modify this with the outputs from the ERes2Net model.
-control_factor = np.array([0], dtype=np.int8)                         # If you are using the ERes2Net voice vector, set the value to 1.0; otherwise, set it to 0.0.
+control_factor = np.array([0], dtype=np.int8)                         # If you are using the ERes2Net voice vector, set the value to 1; otherwise, set it to 0.
 results = []
 start_time = time.time()
 while slice_end <= aligned_len:
