@@ -23,6 +23,7 @@ WINDOW_TYPE = 'kaiser'                                      # Type of window fun
 N_MELS = 80                                                 # Number of Mel bands to generate in the Mel-spectrogram, edit it carefully.
 NFFT = 400                                                  # Number of FFT components for the STFT process, edit it carefully.
 HOP_LENGTH = 160                                            # Number of samples between successive frames in the STFT, edit it carefully.
+VOICE_EMBED_DIM = 192                                       # Model setting.
 SAMPLE_RATE = 16000                                         # The model parameter, do not edit the value.
 PRE_EMPHASIZE = 0.97                                        # For audio preprocessing.
 SLIDING_WINDOW = 0                                          # Set the sliding window step for test audio reading; use 0 to disable.
@@ -39,6 +40,25 @@ def normalize_to_int16(audio):
     return (audio * float(scaling_factor)).astype(np.int16)
 
 
+class PosEncoding(torch.nn.Module):
+    def __init__(self, max_seq_len, d_word_vec):
+        super(PosEncoding, self).__init__()
+        position = torch.arange(0, max_seq_len).unsqueeze(1).float()
+        div_term = torch.exp(torch.arange(0, d_word_vec, 2).float() * (-torch.log(torch.tensor(10000.0)) / d_word_vec))
+        pos_enc = torch.zeros(max_seq_len, d_word_vec)
+        pos_enc[:, 0::2] = torch.sin(position * div_term)
+        pos_enc[:, 1::2] = torch.cos(position * div_term[:d_word_vec // 2])
+        pad_row = torch.zeros(1, d_word_vec)
+        pos_enc = torch.cat([pad_row, pos_enc], dim=0)
+        self.pos_enc = torch.nn.Embedding(max_seq_len + 1, d_word_vec)
+        self.pos_enc.weight = torch.nn.Parameter(pos_enc, requires_grad=False)
+        self.arrange = torch.arange(1, self.pos_enc.num_embeddings).repeat(2, 1).to(torch.int16)
+
+    def forward(self, input_len):
+        input_pos = self.arrange[:, :input_len].int()
+        return self.pos_enc(input_pos)
+
+
 class CAMPPLUS(torch.nn.Module):
     def __init__(self, campplus, stft_model, nfft, n_mels, sample_rate, pre_emphasis):
         super(CAMPPLUS, self).__init__()
@@ -47,18 +67,20 @@ class CAMPPLUS(torch.nn.Module):
         self.pre_emphasis = pre_emphasis
         self.fbank = (torchaudio.functional.melscale_fbanks(nfft // 2 + 1, 20, sample_rate // 2, n_mels, sample_rate, None,'htk')).transpose(0, 1).unsqueeze(0)
         self.inv_int16 = float(1.0 / 32768.0)
-        embed = torch.zeros((1, 1, campplus.model_config['anchor_size']), dtype=torch.float32)
+        embed = torch.zeros((1, 1, campplus.model_config['anchor_size']), dtype=torch.int8)
         embed[:, :, 1::2] = 1
         self.anchors = torch.cat((embed, 1 - embed), dim=0)
+        self.campplus.backend.pos_enc_plus = PosEncoding(4096, 256)
 
-    def forward(self, audio):
+    def forward(self, audio, voice_embed_x, voice_embed_y, control_factor):
         audio = audio.float() * self.inv_int16
         audio -= torch.mean(audio)  # Remove DC Offset
         audio = torch.cat((audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]), dim=-1)  # Pre Emphasize
         real_part, imag_part = self.stft_model(audio, 'constant')
         mel_features = torch.matmul(self.fbank, real_part * real_part + imag_part * imag_part).clamp(min=1e-5).log()
         mel_features -= mel_features.mean(dim=-1, keepdim=True)
-        output = self.campplus(mel_features, self.anchors)
+        anchors = torch.cat((voice_embed_x, voice_embed_y), dim=0) * control_factor + (self.anchors * (1 - control_factor)).float()
+        output = self.campplus(mel_features, anchors)
         argmax_values = output.argmax(dim=-1).int()
         output = torch.nonzero(argmax_values[1:] - argmax_values[:-1]).squeeze(-1)
         return output.shape[0].int(), output.float()
@@ -66,19 +88,23 @@ class CAMPPLUS(torch.nn.Module):
 
 print('\nExport start ...\n')
 with torch.inference_mode():
+    from modelscope.utils.config import Config, ConfigDict
     custom_stft = STFT_Process(model_type='stft_B', n_fft=NFFT, hop_len=HOP_LENGTH, max_frames=0, window_type=WINDOW_TYPE).eval()  # The max_frames is not the key parameter for STFT, but it is for ISTFT.
     model = Model.from_pretrained(
         model_name_or_path=model_path,
         disable_update=True,
-        device="cpu",
+        device="cpu"
     ).eval()
     campplus = CAMPPLUS(model, custom_stft,  NFFT, N_MELS, SAMPLE_RATE, PRE_EMPHASIZE)
     audio = torch.ones((1, 1, INPUT_AUDIO_LENGTH), dtype=torch.int16)
+    voice_embed_x = torch.ones((1, 1, VOICE_EMBED_DIM), dtype=torch.float32)
+    voice_embed_y = torch.ones((1, 1, VOICE_EMBED_DIM), dtype=torch.float32)
+    control_factor = torch.tensor([0], dtype=torch.int8)
     torch.onnx.export(
         campplus,
-        (audio,),
+        (audio, voice_embed_x, voice_embed_y, control_factor),
         onnx_model_A,
-        input_names=['audio'],
+        input_names=['audio', 'voice_embed_x', 'voice_embed_y', 'control_factor'],
         output_names=['output_len', 'output'],
         do_constant_folding=True,
         dynamic_axes={
@@ -90,6 +116,9 @@ with torch.inference_mode():
     del model
     del campplus
     del audio
+    del voice_embed_x
+    del voice_embed_y
+    del control_factor
     gc.collect()
 print('\nExport done!\n\nStart to run ERes2NetV2 by ONNX Runtime.\n\nNow, loading the model...')
 
@@ -117,6 +146,9 @@ else:
 in_name_A = ort_session_A.get_inputs()
 out_name_A = ort_session_A.get_outputs()
 in_name_A0 = in_name_A[0].name
+in_name_A1 = in_name_A[1].name
+in_name_A2 = in_name_A[2].name
+in_name_A3 = in_name_A[3].name
 out_name_A0 = out_name_A[0].name
 out_name_A1 = out_name_A[1].name
 
@@ -152,13 +184,19 @@ slice_start = 0
 slice_end = INPUT_AUDIO_LENGTH
 sample_rate_factor = np.array([SAMPLE_RATE * 0.01], dtype=np.float32)
 bias = np.array([0.0], dtype=np.float32)  # Experience value
+voice_embed_x = np.zeros((1, 1, VOICE_EMBED_DIM), dtype=np.float32)   # You can modify this with the outputs from the ERes2Net model.
+voice_embed_y = np.zeros((1, 1, VOICE_EMBED_DIM), dtype=np.float32)   # You can modify this with the outputs from the ERes2Net model.
+control_factor = np.array([0], dtype=np.int8)                         # If you are using the ERes2Net voice vector, set the value to 1.0; otherwise, set it to 0.0.
 results = []
 start_time = time.time()
 while slice_end <= aligned_len:
     output_len, output = ort_session_A.run(
         [out_name_A0, out_name_A1],
         {
-            in_name_A0: audio[:, :, slice_start: slice_end]
+            in_name_A0: audio[:, :, slice_start: slice_end],
+            in_name_A1: voice_embed_x,
+            in_name_A2: voice_embed_y,
+            in_name_A3: control_factor
         })
     if output_len != 0:
         speech_change_start = ((output[0] + bias) * sample_rate_factor).astype(np.int32)
