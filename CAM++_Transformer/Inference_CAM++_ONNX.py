@@ -9,10 +9,9 @@ onnx_model_A = "/home/DakeQQ/Downloads/CAM_Optimized/CAM.onnx"                  
 test_audio = model_path + "/examples/scl_example2.wav"                                       # The test audio list.
 
 
-ORT_Accelerate_Providers = []                               # If you have accelerate devices for : ['CUDAExecutionProvider', 'TensorrtExecutionProvider', 'CoreMLExecutionProvider', 'DmlExecutionProvider', 'OpenVINOExecutionProvider', 'ROCMExecutionProvider', 'MIGraphXExecutionProvider', 'AzureExecutionProvider']
-                                                            # else keep empty.
 SAMPLE_RATE = 16000                                         # The model parameter, do not edit the value.
 SLIDING_WINDOW = 0                                          # Set the sliding window step for test audio reading; use 0 to disable.
+VOICE_EMBED_DIM = 192                                       # Model setting.
 
 
 def normalize_to_int16(audio):
@@ -23,7 +22,7 @@ def normalize_to_int16(audio):
 
 # ONNX Runtime settings
 session_opts = onnxruntime.SessionOptions()
-session_opts.log_severity_level = 3         # error level, it an adjustable value.
+session_opts.log_severity_level = 4         # fatal level, it an adjustable value.
 session_opts.inter_op_num_threads = 0       # Run different nodes with num_threads. Set 0 for auto.
 session_opts.intra_op_num_threads = 0       # Under the node, execute the operators with num_threads. Set 0 for auto.
 session_opts.enable_cpu_mem_arena = True    # True for execute speed; False for less memory usage.
@@ -35,6 +34,10 @@ session_opts.add_session_config_entry("session.set_denormal_as_zero", "1")
 
 
 ort_session_A = onnxruntime.InferenceSession(onnx_model_A, sess_options=session_opts, providers=ORT_Accelerate_Providers)
+if 'float16' in ort_session_A._inputs_meta[1].type:
+    dtype = np.float16
+else:
+    dtype = np.float32
 print(f"\nUsable Providers: {ort_session_A.get_providers()}")
 shape_value_in = ort_session_A._inputs_meta[0].shape[-1]
 if isinstance(shape_value_in, str):
@@ -44,6 +47,9 @@ else:
 in_name_A = ort_session_A.get_inputs()
 out_name_A = ort_session_A.get_outputs()
 in_name_A0 = in_name_A[0].name
+in_name_A1 = in_name_A[1].name
+in_name_A2 = in_name_A[2].name
+in_name_A3 = in_name_A[3].name
 out_name_A0 = out_name_A[0].name
 out_name_A1 = out_name_A[1].name
 
@@ -77,15 +83,21 @@ aligned_len = audio.shape[-1]
 # Start to run CAM++_Transformer
 slice_start = 0
 slice_end = INPUT_AUDIO_LENGTH
-sample_rate_factor = np.array([SAMPLE_RATE * 0.01], dtype=np.float32)
-bias = np.array([0.0], dtype=np.float32)  # Experience value
+sample_rate_factor = np.array([SAMPLE_RATE * 0.01], dtype=dtype)
+bias = np.array([0.0], dtype=dtype)  # Experience value
+voice_embed_x = np.zeros((1, 1, VOICE_EMBED_DIM), dtype=dtype)   # You can modify this with the outputs from the ERes2Net model.
+voice_embed_y = np.zeros((1, 1, VOICE_EMBED_DIM), dtype=dtype)   # You can modify this with the outputs from the ERes2Net model.
+control_factor = np.array([0], dtype=np.int8)                    # If you are using the ERes2Net voice vector, set the value to 1; otherwise, set it to 0.
 results = []
 start_time = time.time()
 while slice_end <= aligned_len:
     output_len, output = ort_session_A.run(
         [out_name_A0, out_name_A1],
         {
-            in_name_A0: audio[:, :, slice_start: slice_end]
+            in_name_A0: audio[:, :, slice_start: slice_end],
+            in_name_A1: voice_embed_x,
+            in_name_A2: voice_embed_y,
+            in_name_A3: control_factor
         })
     if output_len != 0:
         speech_change_start = ((output[0] + bias) * sample_rate_factor).astype(np.int32)
