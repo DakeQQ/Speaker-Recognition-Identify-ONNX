@@ -175,7 +175,7 @@ class TransformerDetector(nn.Module):
         feats = feats.repeat(2, 1, 1)
         anchors = anchors.repeat(1, num_frames, 1)
         sd_in = torch.cat((feats, anchors), dim=-1)
-        return self.output(self.detection(sd_in, num_frames) + self.pos_enc(num_frames), num_frames)
+        return self.output(self.detection(sd_in, num_frames) + self.pos_enc_plus(num_frames), num_frames)
 
 
 @MODELS.register_module(Tasks.speaker_diarization, module_name=Models.scl_sd)
