@@ -135,7 +135,7 @@ with torch.inference_mode():
     del voice_embed_y
     del control_factor
     gc.collect()
-print('\nExport done!\n\nStart to run ERes2NetV2 by ONNX Runtime.\n\nNow, loading the model...')
+print('\nExport done!\n\nStart to run CAM++Transformer by ONNX Runtime.\n\nNow, loading the model...')
 
 
 # ONNX Runtime settings
