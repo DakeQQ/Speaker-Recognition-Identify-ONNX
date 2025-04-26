@@ -14,7 +14,7 @@ sentence = "你是如何看待这个问题的呢？这个问题挺好解决的�
 
 
 DYNAMIC_AXES = False          # Whether both are set to True or False, they must still be less than MAX_INPUT_WORDS.
-MAX_INPUT_WORDS = 128         # The maximum input words for a sentence.
+MAX_INPUT_WORDS = 1024        # The maximum input words for a sentence.
 TOKEN_UNKNOWN = 100           # The model parameter, do not edit it.
 TOKEN_BEGIN = 101             # The model parameter, do not edit it.
 TOKEN_END = 102               # The model parameter, do not edit it.
@@ -27,11 +27,10 @@ vocab = np.array([line.strip() for line in vocab], dtype=np.str_)
 
 
 class BERT(torch.nn.Module):
-    def __init__(self, bert_model, max_seq_len, token_end):
+    def __init__(self, bert_model, max_seq_len):
         super(BERT, self).__init__()
         self.bert_model = bert_model.bert
         self.head = bert_model.head
-        self.token_end = token_end
         attention_head_size_factor = float(self.bert_model.encoder.layer._modules["0"].attention.self.attention_head_size ** -0.25)
         for layer in self.bert_model.encoder.layer:
             layer.attention.self.query.weight.data *= attention_head_size_factor
@@ -41,11 +40,8 @@ class BERT(torch.nn.Module):
         self.bert_model.embeddings.token_type_embeddings.weight.data = self.bert_model.embeddings.token_type_embeddings.weight.data[[0], :max_seq_len].unsqueeze(-1)
         self.bert_model.embeddings.position_embeddings.weight.data = self.bert_model.embeddings.position_embeddings.weight.data[:max_seq_len, :].unsqueeze(0)
 
-    def forward(self, input_ids: torch.IntTensor, punc_ids: torch.IntTensor):
-        if DYNAMIC_AXES:
-            ids_len = input_ids.shape[-1].unsqueeze(0)
-        else:
-            ids_len = torch.where(input_ids == self.token_end)[-1] + 1
+    def forward(self, input_ids: torch.IntTensor, punc_ids: torch.IntTensor, ids_len: torch.IntTensor):
+        if not DYNAMIC_AXES:
             input_ids = input_ids[:, :ids_len]
             punc_ids = punc_ids[:, :ids_len]
         hidden_states = self.bert_model.embeddings.LayerNorm(self.bert_model.embeddings.word_embeddings(input_ids) + self.bert_model.embeddings.token_type_embeddings.weight.data[:, :ids_len] + self.bert_model.embeddings.position_embeddings.weight.data[:, :ids_len])
@@ -71,13 +67,14 @@ with torch.inference_mode():
     ).model.eval().float()
     input_ids = torch.zeros((1, MAX_INPUT_WORDS), dtype=torch.int32)
     punc_ids = torch.zeros((1, MAX_INPUT_WORDS), dtype=torch.int32)
+    ids_len = torch.ones(1, dtype=torch.int64)
     if not DYNAMIC_AXES:
         input_ids[:, 0] = TOKEN_END
-    model = BERT(model, MAX_INPUT_WORDS, TOKEN_END)
+    model = BERT(model, MAX_INPUT_WORDS)
     torch.onnx.export(model,
-                      (input_ids, punc_ids),
+                      (input_ids, punc_ids, ids_len),
                       onnx_model_A,
-                      input_names=['text_ids', 'punc_ids'],
+                      input_names=['text_ids', 'punc_ids', 'ids_len'],
                       output_names=['turn_indices', 'turn_indices_len'],
                       dynamic_axes={
                           'text_ids': {1: 'ids_len'},
@@ -117,6 +114,7 @@ def tokenizer(input_string, max_input_words, is_dynamic):
                 if ids_len == full:
                     break
     input_ids[:, ids_len] = TOKEN_END
+    ids_len += 1
 
     punc_ids = np.zeros((1, max_input_words), dtype=np.int32)
     for i, ch in enumerate(input_string):
@@ -126,10 +124,10 @@ def tokenizer(input_string, max_input_words, is_dynamic):
             punc_ids[:, i] = 0
 
     if is_dynamic:
-        input_ids = input_ids[:, :ids_len + 1]
-        punc_ids = punc_ids[:, :ids_len + 1]
+        input_ids = input_ids[:, :ids_len]
+        punc_ids = punc_ids[:, :ids_len]
 
-    return input_ids, punc_ids, input_string
+    return input_ids, punc_ids, np.array([ids_len], dtype=np.int64), input_string
 
 
 print("\nRun the Bert Speaker Diarization by ONNXRuntime.")
@@ -148,6 +146,7 @@ ort_session_A = onnxruntime.InferenceSession(onnx_model_A, sess_options=session_
 shape_value_in = ort_session_A._inputs_meta[0].shape[-1]
 in_name_A0 = ort_session_A.get_inputs()[0].name
 in_name_A1 = ort_session_A.get_inputs()[1].name
+in_name_A2 = ort_session_A.get_inputs()[2].name
 out_name_A0 = ort_session_A.get_outputs()[0].name
 out_name_A1 = ort_session_A.get_outputs()[1].name
 if isinstance(shape_value_in, str):
@@ -158,9 +157,9 @@ else:
     is_dynamic = False
 
 # Run the Bert_Speaker_Diarization
-input_ids, punc_ids, input_string = tokenizer(sentence, max_input_words, is_dynamic)
+input_ids, punc_ids, ids_len, input_string = tokenizer(sentence, max_input_words, is_dynamic)
 start_time = time.time()
-turn_indices, turn_indices_len = ort_session_A.run([out_name_A0, out_name_A1], {in_name_A0: input_ids, in_name_A1: punc_ids})
+turn_indices, turn_indices_len = ort_session_A.run([out_name_A0, out_name_A1], {in_name_A0: input_ids, in_name_A1: punc_ids, in_name_A2: ids_len})
 end_time = time.time()
 if turn_indices_len != 0:
     shift = 1
