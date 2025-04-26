@@ -78,6 +78,7 @@ def tokenizer(input_string, max_input_words, is_dynamic):
                 if ids_len == full:
                     break
     input_ids[:, ids_len] = TOKEN_END
+    ids_len += 1
 
     punc_ids = np.zeros((1, max_input_words), dtype=np.int32)
     for i, ch in enumerate(input_string):
@@ -87,10 +88,10 @@ def tokenizer(input_string, max_input_words, is_dynamic):
             punc_ids[:, i] = 0
 
     if is_dynamic:
-        input_ids = input_ids[:, :ids_len + 1]
-        punc_ids = punc_ids[:, :ids_len + 1]
+        input_ids = input_ids[:, :ids_len]
+        punc_ids = punc_ids[:, :ids_len]
 
-    return input_ids, punc_ids, input_string
+    return input_ids, punc_ids, np.array([ids_len], dtype=np.int64), input_string
 
 
 print("\nRun the Bert Speaker Diarization by ONNXRuntime.")
@@ -110,6 +111,7 @@ print(f"\nUsable Providers: {ort_session_A.get_providers()}")
 shape_value_in = ort_session_A._inputs_meta[0].shape[-1]
 in_name_A0 = ort_session_A.get_inputs()[0].name
 in_name_A1 = ort_session_A.get_inputs()[1].name
+in_name_A2 = ort_session_A.get_inputs()[2].name
 out_name_A0 = ort_session_A.get_outputs()[0].name
 out_name_A1 = ort_session_A.get_outputs()[1].name
 if isinstance(shape_value_in, str):
@@ -120,9 +122,9 @@ else:
     is_dynamic = False
 
 # Run the Bert_Speaker_Diarization
-input_ids, punc_ids, input_string = tokenizer(sentence, max_input_words, is_dynamic)
+input_ids, punc_ids, ids_len, input_string = tokenizer(sentence, max_input_words, is_dynamic)
 start_time = time.time()
-turn_indices, turn_indices_len = ort_session_A.run([out_name_A0, out_name_A1], {in_name_A0: input_ids, in_name_A1: punc_ids})
+turn_indices, turn_indices_len = ort_session_A.run([out_name_A0, out_name_A1], {in_name_A0: input_ids, in_name_A1: punc_ids, in_name_A2: ids_len})
 end_time = time.time()
 if turn_indices_len != 0:
     shift = 1
@@ -133,3 +135,4 @@ if turn_indices_len != 0:
     print(f"\nSpeaker Turn Position: {turn_indices}\n\nSplit Sentence:\n-> {input_string}\n\nTime Cost: {end_time - start_time:.3f} seconds")
 else:
     print("\nNo Speaker Turn detected.")
+  
