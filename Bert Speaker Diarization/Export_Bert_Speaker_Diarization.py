@@ -10,7 +10,7 @@ from modelscope.utils.constant import Tasks
 model_path = r"/home/DakeQQ/Downloads/speech_bert_semantic-spk-turn-detection-punc_speaker-diarization_chinese"      # Path to the entire downloaded Bert model project.
 onnx_model_A = r"/home/DakeQQ/Downloads/Bert_Speaker_Diarization_ONNX/Bert_Speaker_Diarization.onnx"                 # The exported onnx model save path.
 vocab_path = f'{model_path}/vocab.txt'                                                                               # Set the path where the Bert model vocab.txt stored.
-sentence = "你是如何看待这个问题的呢？这个问题挺好解决的，我们只需要增加停车位就行了。嗯嗯，好，那我们业主就放心了。"                    # The sentence for test.
+sentence = "你是如何看待这个问题的呢？这个问题挺好解决的，我们只需要增加停车位就行了。嗯嗯，好，那我们业主就放心了。"                 # The sentence for test.
 
 
 DYNAMIC_AXES = False          # Whether both are set to True or False, they must still be less than MAX_INPUT_WORDS.
