@@ -83,7 +83,7 @@ with torch.inference_mode():
                           'text_ids': {1: 'ids_len'},
                           'punc_ids': {1: 'ids_len'},
                           'turn_indices': {-1: 'turn_indices_len'}
-                      } if DYNAMIC_AXES else None,
+                      } if DYNAMIC_AXES else {'turn_indices': {-1: 'turn_indices_len'}},
                       do_constant_folding=True,
                       opset_version=17)
 del model
