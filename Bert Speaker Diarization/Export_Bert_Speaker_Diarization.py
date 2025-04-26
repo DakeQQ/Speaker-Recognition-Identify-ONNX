@@ -68,8 +68,6 @@ with torch.inference_mode():
     input_ids = torch.zeros((1, MAX_INPUT_WORDS), dtype=torch.int32)
     punc_ids = torch.zeros((1, MAX_INPUT_WORDS), dtype=torch.int32)
     ids_len = torch.ones(1, dtype=torch.int64)
-    if not DYNAMIC_AXES:
-        input_ids[:, 0] = TOKEN_END
     model = BERT(model, MAX_INPUT_WORDS)
     torch.onnx.export(model,
                       (input_ids, punc_ids, ids_len),
