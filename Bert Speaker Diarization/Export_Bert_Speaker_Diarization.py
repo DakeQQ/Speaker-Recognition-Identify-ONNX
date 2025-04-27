@@ -90,10 +90,11 @@ print("\nExport Done!")
 # For Bert Model
 def tokenizer(input_string, max_input_words, is_dynamic):
     input_ids = np.zeros((1, max_input_words), dtype=np.int32)
+    punc_ids = input_ids
     input_string = re.findall(r'[\u4e00-\u9fa5]|[a-zA-Z]+|[^\w\s]', input_string.lower())
     input_ids[0] = TOKEN_BEGIN
-    full = max_input_words - 1
     ids_len = 1
+    full = max_input_words - 1
     for i in input_string:
         indices = np.where(vocab == i)[0]
         if len(indices) > 0:
@@ -114,7 +115,7 @@ def tokenizer(input_string, max_input_words, is_dynamic):
     input_ids[:, ids_len] = TOKEN_END
     ids_len += 1
 
-    punc_ids = np.zeros((1, max_input_words), dtype=np.int32)
+    # Process the punc_ids
     for i, ch in enumerate(input_string):
         if ch in ['。', '，', '？', '！']:
             punc_ids[:, i] = 1
