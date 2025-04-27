@@ -59,8 +59,8 @@ def tokenizer(input_string, max_input_words, is_dynamic):
     punc_ids = input_ids  
     input_string = re.findall(r'[\u4e00-\u9fa5]|[a-zA-Z]+|[^\w\s]', input_string.lower())
     input_ids[0] = TOKEN_BEGIN
-    full = max_input_words - 1
     ids_len = 1
+    full = max_input_words - 1
     for i in input_string:
         indices = np.where(vocab == i)[0]
         if len(indices) > 0:
