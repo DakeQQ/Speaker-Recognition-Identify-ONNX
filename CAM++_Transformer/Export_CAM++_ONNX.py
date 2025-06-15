@@ -82,11 +82,11 @@ class CAMPPLUS(torch.nn.Module):
 
     def forward(self, audio, voice_embed_x, voice_embed_y, control_factor):
         audio = audio.float() * self.inv_int16
-        audio -= torch.mean(audio)  # Remove DC Offset
+        audio = audio - torch.mean(audio)  # Remove DC Offset
         audio = torch.cat((audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]), dim=-1)  # Pre Emphasize
         real_part, imag_part = self.stft_model(audio, 'constant')
         mel_features = torch.matmul(self.fbank, real_part * real_part + imag_part * imag_part).clamp(min=1e-5).log()
-        mel_features -= mel_features.mean(dim=-1, keepdim=True)
+        mel_features = mel_features - mel_features.mean(dim=-1, keepdim=True)
         anchors = torch.cat((voice_embed_x, voice_embed_y), dim=0) * control_factor + (self.anchors * (1 - control_factor)).float()
         output = self.campplus(mel_features, anchors)
         argmax_values = output.argmax(dim=-1).int()
