@@ -37,7 +37,7 @@ ONNX_MODEL_PATH = "./SoundSourceLocalize.onnx"
 # Pre-calculated constants for optimization
 TWO_PI = 2.0 * math.pi                  # Pre-calculated 2π
 
-# Angle grid for DOA estimation (0° = right, 90° = front, 180° = left)
+# Angle grid for DOA estimation (0° = left, 90° = front, 180° = right)
 ANGLE_GRID = torch.arange(0, 181, step=2, dtype=torch.float32)
 
 # Sector definitions for direction classification
@@ -46,28 +46,27 @@ ANGLE_GRID = torch.arange(0, 181, step=2, dtype=torch.float32)
                              Cabin
 ========================= L ⊙-MIC-⊙ R ========================
 |                              |                             |
-|    Front-Left (135°-180°)    |     Front-Right (0°-45°)    |
+|     Front-Left (0°-45°)      |    Front-Right (135°-180°)  |
 |                              |                             |
 ==============================================================
 |                              |                             |
-|     Rear-Left (90°-135°)     |     Rear-Right (45°-90°)    |
+|     Rear-Left (45°-90°)      |    Rear-Right (90°-135°)    |
 |                              |                             |
 ==============================================================
-
 """
 
 SECTORS = {
-    0: (0.0, 45.0),     # Front-Right
-    1: (45.0, 90.0),    # Rear-Right  
-    2: (90.0, 135.0),   # Rear-Left
-    3: (135.0, 180.0)   # Front-Left
+    0: (0.0, 45.0),     # Front-Left
+    1: (45.0, 90.0),    # Rear-Left
+    2: (90.0, 135.0),   # Rear-Right
+    3: (135.0, 180.0)   # Front-Right
 }
 
 SECTOR_NAMES = {
-    0: "Front-Right",
-    1: "Rear-Right",
-    2: "Rear-Left",
-    3: "Front-Left"
+    0: "Front-Left",
+    1: "Rear-Left",
+    2: "Rear-Right",
+    3: "Front-Right"
 }
 
 # ============================================================
