@@ -8,6 +8,7 @@ Leverage ONNX Runtime for efficient speaker role identification and speaker chan
 - [Speaker Identification -  ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common)
 - [Speaker Change Detection - CAM++_Transformer](https://modelscope.cn/models/iic/speech_campplus-transformer_scl_zh-cn_16k-common)
 - [Speaker Change Detection - Bert](https://modelscope.cn/models/iic/speech_bert_semantic-spk-turn-detection-punc_speaker-diarization_chinese)
+- Sound_Source_Localization
 
 ### Features  
 - End-to-end speaker recognition with built-in `STFT` processing.  
@@ -44,6 +45,7 @@ Leverage ONNX Runtime for efficient speaker role identification and speaker chan
 - [说话人识别 - ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common)
 - [说话人转变点检测 - CAM++_Transformer](https://modelscope.cn/models/iic/speech_campplus-transformer_scl_zh-cn_16k-common)
 - [说话人转变点检测 - Bert](https://modelscope.cn/models/iic/speech_bert_semantic-spk-turn-detection-punc_speaker-diarization_chinese)
+- 声源定位
 
 ### 功能特点  
 - 端到端说话人识别，内置 `STFT` 处理。  
