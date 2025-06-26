@@ -26,9 +26,9 @@ HOP_LENGTH = 512                        # Hop length between successive frames
 WINDOW_LENGTH = 1024                    # Length of each analysis window
 MAX_SIGNAL_LENGTH = 4096                # Maximum signal length to process
 WINDOW_TYPE = 'kaiser'                  # Window function type for STFT
-ALPHA = 0.3                             # Algorithm factor
-BETA = 0.6                              # Algorithm factor
-GAMMA = 0.1                             # Algorithm factor, ALPHA + BETA + GAMMA = 1.0
+ALPHA = 0.3                             # Algorithm factor for geometric mean score
+BETA = 0.6                              # Algorithm factor for arithmetic mean score
+GAMMA = 0.1                             # Algorithm factor for peak-weighted score, ALPHA + BETA + GAMMA = 1.0
 
 # Model export settings
 DYNAMIC_AXES = True                     # Enable dynamic axes for ONNX export
@@ -38,7 +38,7 @@ ONNX_MODEL_PATH = "./SoundSourceLocalize.onnx"
 TWO_PI = 2.0 * math.pi                  # Pre-calculated 2π
 
 # Angle grid for DOA estimation (0° = left, 90° = front, 180° = right)
-ANGLE_GRID = torch.arange(0, 181, step=2, dtype=torch.float32)
+ANGLE_GRID = torch.arange(0, 181, step=1, dtype=torch.float32)
 
 # Sector definitions for direction classification
 
@@ -134,11 +134,12 @@ def fractional_delay(sig: torch.Tensor, delay: float) -> torch.Tensor:
     """Apply fractional sample delay using frequency domain method"""
     if abs(delay) < 1e-6:
         return sig.clone()
-    
+
     N = sig.numel()
+    # Sanity check to prevent extreme, unphysical delays
     if abs(delay) >= N / 2:
         delay = np.sign(delay) * N / 4
-    
+
     # Pre-calculate FFT frequencies and apply phase shift
     X = torch.fft.fft(sig)
     freqs = torch.fft.fftfreq(N, device=sig.device)
@@ -158,7 +159,7 @@ def generate_vehicle_noise(environment: str, duration: float, sample_rate: int) 
     env_params = VEHICLE_ENVIRONMENTS[environment]
     n_samples = int(duration * sample_rate)
     t = torch.linspace(0, duration, n_samples)
-    
+
     # Initialize stereo noise channels
     noise_left = torch.zeros(n_samples)
     noise_right = torch.zeros(n_samples)
@@ -167,7 +168,7 @@ def generate_vehicle_noise(environment: str, duration: float, sample_rate: int) 
     road_level_db = env_params['road_noise']
     road_amplitude = 10 ** (road_level_db / 20.0)
     road_freqs = [25, 40, 60, 80, 120, 160]
-    
+
     for f in road_freqs:
         if f < sample_rate / 2:
             # Add frequency variation and random phases
@@ -175,7 +176,7 @@ def generate_vehicle_noise(environment: str, duration: float, sample_rate: int) 
             phase_l = random.uniform(0, TWO_PI)
             phase_r = random.uniform(0, TWO_PI)
             amp = road_amplitude * random.uniform(0.5, 1.0) / len(road_freqs)
-            
+
             # Generate sinusoidal components
             noise_left += amp * torch.sin(TWO_PI * f_actual * t + phase_l)
             noise_right += amp * torch.sin(TWO_PI * f_actual * t + phase_r)
@@ -184,27 +185,23 @@ def generate_vehicle_noise(environment: str, duration: float, sample_rate: int) 
     wind_level_db = env_params['wind_noise']
     wind_amplitude = 10 ** (wind_level_db / 20.0)
     broadband = wind_amplitude * torch.randn(n_samples)
-    
+
     # Apply crude band-pass filter (200-2000 Hz) if sufficient samples
     if n_samples > 200:
         kernel_size = min(101, n_samples // 10)
         kernel_size += 1 - (kernel_size % 2)  # Ensure odd kernel size
-        kernel = torch.zeros(kernel_size)
         mid = kernel_size // 2
-        
-        # Create band-pass filter kernel
-        temp = 2000 - 200
-        for i in range(kernel_size):
-            tk = (i - mid) / sample_rate
-            if abs(tk) > 1e-6:
-                kernel[i] = (2000 * torch.sinc(torch.tensor(2000 * tk)) - 200 * torch.sinc(torch.tensor(200 * tk)))
-            else:
-                kernel[i] = temp
-        
-        kernel = kernel / torch.sum(torch.abs(kernel))
+
+        # Create band-pass filter kernel using sinc functions
+        tk = (torch.arange(kernel_size) - mid) / sample_rate
+        f_high, f_low = 2000, 200
+        kernel = f_high * torch.sinc(f_high * tk) - f_low * torch.sinc(f_low * tk)
+        kernel *= torch.hann_window(kernel_size) # Apply a window to the filter
+        kernel /= torch.sum(torch.abs(kernel))
+
         pad = kernel_size // 2
         wind_filtered = F.conv1d(broadband.unsqueeze(0).unsqueeze(0), kernel.unsqueeze(0).unsqueeze(0), padding=pad).squeeze()
-        
+
         # Add filtered wind noise with random scaling
         noise_left += wind_filtered * random.uniform(0.8, 1.2)
         noise_right += wind_filtered * random.uniform(0.8, 1.2)
@@ -213,7 +210,7 @@ def generate_vehicle_noise(environment: str, duration: float, sample_rate: int) 
     engine_db = env_params['engine_level']
     engine_amplitude = 10 ** (engine_db / 20.0)
     f0 = random.uniform(80, 120)  # Base engine frequency
-    
+
     for harmonic in [1, 2, 3, 4, 6, 8]:
         f = f0 * harmonic
         if f < sample_rate / 2:
@@ -222,7 +219,7 @@ def generate_vehicle_noise(environment: str, duration: float, sample_rate: int) 
             modulation = 1 + 0.2 * torch.sin(TWO_PI * random.uniform(2, 8) * t)
             phase_l = random.uniform(0, TWO_PI)
             phase_r = phase_l + random.uniform(-0.2, 0.2)
-            
+
             noise_left += amp * modulation * torch.sin(TWO_PI * f * t + phase_l)
             noise_right += amp * modulation * torch.sin(TWO_PI * f * t + phase_r)
 
@@ -237,7 +234,7 @@ def apply_vehicle_environment(stereo: torch.Tensor, environment: str, snr_db: fl
     # Generate matching duration vehicle noise
     duration_sec = stereo.shape[1] / SAMPLE_RATE
     vehicle_noise = generate_vehicle_noise(environment, duration_sec, SAMPLE_RATE)
-    
+
     # Align signal lengths
     N = min(stereo.shape[1], vehicle_noise.shape[1])
     stereo = stereo[:, :N]
@@ -246,17 +243,17 @@ def apply_vehicle_environment(stereo: torch.Tensor, environment: str, snr_db: fl
     # Calculate power levels and apply SNR
     signal_power = torch.mean(stereo ** 2)
     noise_power = torch.mean(vehicle_noise ** 2)
-    
+
     if signal_power < 1e-10 or noise_power < 1e-10:
         return stereo
-    
+
     snr_linear = 10 ** (snr_db / 10.0)
     noise_scale = torch.sqrt(signal_power / (noise_power * snr_linear))
-    
+
     # Mix signal and noise, then normalize
     noisy_signal = stereo + noise_scale * vehicle_noise
     max_amplitude = torch.max(torch.abs(noisy_signal))
-    
+
     return noisy_signal * 0.95 / max_amplitude if max_amplitude > 0.95 else noisy_signal
 
 
@@ -266,33 +263,32 @@ def apply_vehicle_environment(stereo: torch.Tensor, environment: str, snr_db: fl
 
 class SoundSourceLocalize(nn.Module):
     """Optimized sound source localization using enhanced MVDR beamforming"""
-    
     def __init__(self, sample_rate: int, d_mic: float, angle_grid: torch.Tensor, nfft: int, pre_emphasis: float, alpha, beta, gamma, max_signal_len, custom_stft):
         super().__init__()
         self.custom_stft = custom_stft
-        
+
         # Pre-calculated constants for efficiency
         self.inv_int16 = float(1.0 / 32768.0)
         self.pre_emphasis = float(pre_emphasis)
-        
+
         # Pre-calculate steering vectors for all frequencies and angles
         freqs = torch.fft.rfftfreq(nfft, 1.0 / sample_rate)  # Frequency bins
         tau = -(d_mic * torch.cos(torch.deg2rad(angle_grid))) / SPEED_OF_SOUND  # Time delays
         phase_matrix = TWO_PI * tau.unsqueeze(1) * freqs.unsqueeze(0)  # [Angles, Freqs]
-        
+
         # Register pre-calculated steering vectors (real/imaginary parts)
         self.register_buffer('steer_real', torch.cos(phase_matrix))
         self.register_buffer('steer_imag', torch.sin(phase_matrix))
         self.register_buffer('angle_grid', angle_grid)
-        
+
         # Enhanced frequency weighting - combines multiple strategies
         self._setup_frequency_weighting(freqs, d_mic, sample_rate)
-        
+
         # MVDR combination weights (could be made learnable)
         self.alpha = float(alpha)
         self.beta = float(beta)
         self.gamma = float(gamma)
-        
+
         # Pre-calculated exponential weights for temporal smoothing
         weights = torch.exp(torch.linspace(-2, 0, max_signal_len, dtype=torch.float32))
         self.register_buffer('temporal_weights', (weights / weights.sum()).view(1, 1, -1))
@@ -303,13 +299,13 @@ class SoundSourceLocalize(nn.Module):
         wavelengths = SPEED_OF_SOUND / (freqs + 1e-6)
         spatial_resolution = d_mic / wavelengths
         spatial_weight = torch.sigmoid(4 * (spatial_resolution - 0.1))
-        
+
         # Strategy 2: Mid-frequency emphasis
         freq_weight = 1.0 - torch.exp(-((freqs - sample_rate / 6) ** 2) / (2 * (sample_rate / 4) ** 2))
-        
+
         # Strategy 3: Anti-aliasing weighting
         aliasing_weight = torch.where(spatial_resolution < 0.5, torch.ones_like(freqs), torch.exp(-2 * (spatial_resolution - 0.5) ** 2))
-        
+
         # Combine and normalize weighting strategies
         combined_weight = (spatial_weight * freq_weight * aliasing_weight).unsqueeze(0)
         self.register_buffer('freq_weight', combined_weight / (combined_weight.sum() + 1e-6))
@@ -318,45 +314,45 @@ class SoundSourceLocalize(nn.Module):
         """Enhanced MVDR spectrum calculation with multiple integration strategies"""
         # Temporal smoothing with pre-calculated exponential weights
         weights = self.temporal_weights[..., :p0.shape[-1]]
-        
+
         # Compute smoothed covariance matrix elements
         R00 = (p0 * weights).sum(dim=2)
         R11 = (p1 * weights).sum(dim=2)
         R01r = (r01 * weights).sum(dim=2)
         R01i = (i01 * weights).sum(dim=2)
-        
+
         # Diagonal loading for numerical stability
         trace = (R00 + R11) * 0.5
-        
+
         # Robust matrix inversion with conditioning
         determinant = R00 * R11 - (R01r ** 2 + R01i ** 2)
         determinant = determinant + 1e-6 * trace  # Diagonal loading
-        
+
         inv_det = 1.0 / determinant
         iR00 = R11 * inv_det
         iR11 = R00 * inv_det
         iR01r = -R01r * inv_det  # Note the negative sign
         iR01i = -R01i * inv_det
-        
+
         # MVDR beamformer power calculation for all angles
         quadratic_form = iR01r * self.steer_real + iR01i * self.steer_imag
         quadratic_form = iR00 + iR11 + quadratic_form + quadratic_form
-        
+
         mvdr_power = 1.0 / (quadratic_form + 1e-6)  # Avoid division by zero
-        
+
         # Multiple integration strategies for robust estimation
         log_power = torch.log(mvdr_power + 1e-6)
         weighted_log = (log_power * self.freq_weight).sum(-1)
         geometric_score = torch.exp(weighted_log)
-        
+
         arithmetic_score = (mvdr_power * self.freq_weight).sum(-1)
-        
+
         peak_weight = torch.softmax(mvdr_power + mvdr_power, dim=-1)
         peak_score = (mvdr_power * peak_weight * self.freq_weight).sum(-1)
-        
+
         # Weighted combination of strategies
         final_score = self.alpha * geometric_score + self.beta * arithmetic_score + self.gamma * peak_score
-        
+
         return final_score
 
     def forward(self, mic_wav_0: torch.Tensor, mic_wav_1: torch.Tensor) -> torch.Tensor:
@@ -364,28 +360,28 @@ class SoundSourceLocalize(nn.Module):
         # Fused preprocessing: normalization, DC removal, pre-emphasis
         mic_wav_0 = mic_wav_0 * self.inv_int16
         mic_wav_1 = mic_wav_1 * self.inv_int16
-        
+
         # Remove DC offset
         mic_wav_0 = mic_wav_0 - torch.mean(mic_wav_0, dim=-1, keepdim=True)
         mic_wav_1 = mic_wav_1 - torch.mean(mic_wav_1, dim=-1, keepdim=True)
-        
+
         # Apply pre-emphasis filter
         mic_wav_0 = torch.cat([mic_wav_0[:, :, :1], mic_wav_0[:, :, 1:] - self.pre_emphasis * mic_wav_0[:, :, :-1]], dim=-1)
         mic_wav_1 = torch.cat([mic_wav_1[:, :, :1], mic_wav_1[:, :, 1:] - self.pre_emphasis * mic_wav_1[:, :, :-1]], dim=-1)
-        
+
         # STFT computation
         r0, i0 = self.custom_stft(mic_wav_0, 'constant')
         r1, i1 = self.custom_stft(mic_wav_1, 'constant')
-        
+
         # Compute power and cross-spectra
         p0 = r0 * r0 + i0 * i0
         p1 = r1 * r1 + i1 * i1
         r01 = r0 * r1 + i0 * i1
         i01 = i0 * r1 - r0 * i1
-        
+
         # Enhanced MVDR processing
         mvdr_scores = self._enhanced_mvdr_spectrum(p0, p1, r01, i01)
-        
+
         # Return estimated angle
         max_indices = torch.argmax(mvdr_scores, dim=-1)
         return self.angle_grid[max_indices]
@@ -394,110 +390,149 @@ class SoundSourceLocalize(nn.Module):
 # ============================================================
 # SIGNAL GENERATION - Optimized and extended
 # ============================================================
+def _apply_fade(signal: torch.Tensor, fade_ms: float = 6.0, sr: int = SAMPLE_RATE):
+    fade_len = int(sr * fade_ms * 1e-3)
+    if fade_len == 0 or fade_len * 2 >= signal.numel():
+        return signal
+    window = torch.sin(torch.linspace(0, math.pi / 2, fade_len)) ** 2
+    signal[:fade_len] *= window            # fade-in
+    signal[-fade_len:] *= window.flip(0)   # fade-out
+    return signal
 
-def generate_test_signal(signal_type: str, duration: float, sample_rate: int) -> torch.Tensor:
-    """Generate various test signals with optimized implementations"""
-    n_samples = int(duration * sample_rate)
-    t = torch.linspace(0, duration, n_samples)
-    
+
+def generate_test_signal(signal_type: str,
+                         duration: float,
+                         sample_rate: int = SAMPLE_RATE) -> torch.Tensor:
+    """
+    Produce a 1-D torch tensor in the range [-1,1] that mimics a variety
+    of acoustic scenes.  All signals are returned at −6 dBFS head-room and
+    include a short fade-in/out to avoid spectral splatter.
+    """
+    n = int(duration * sample_rate)
+    t = torch.arange(n, dtype=torch.float32) / sample_rate
+    two_pi_t = TWO_PI * t
+
     if signal_type == 'tone':
-        frequency = random.uniform(500, 1500)
-        signal = torch.sin(TWO_PI * frequency * t)
-        
+        f = random.uniform(500, 1500)
+        signal = torch.sin(two_pi_t * f)
+
     elif signal_type == 'speech':
-        # Simplified speech-like signal with formants
-        signal = 0.1 * torch.randn(n_samples)
-        formant_freqs = [800, 1200, 2400]
-        envelope = torch.exp(-((t - duration / 2) ** 2) / (2 * (duration / 8) ** 2))
-        
-        for freq in formant_freqs:
-            formant = torch.sin(TWO_PI * freq * t) * envelope
-            signal += 0.3 * formant
-            
+        # --- voiced excitation: impulse train with jitter ---------------
+        f0 = random.uniform(100, 230)                         # base pitch
+        jitter = 0.03                                         # 3 % jitter
+        pulse_period = int(sample_rate / f0)
+        excitation = torch.zeros_like(t)
+        idx = torch.arange(0, n, pulse_period)
+        idx = idx + (torch.randn_like(idx, dtype=torch.float32)
+                     * jitter * pulse_period).long()
+        idx = idx.clamp(0, n - 1).unique(sorted=True)
+        excitation[idx] = 1.0
+
+        # --- simple 3-formant filter (rough male/female average) -------
+        formants = [(500,  60), (1500, 90), (2500, 120)]
+        b = torch.zeros(n)
+        for fc, bw in formants:
+            # 1-pole resonance in the frequency domain
+            w = TWO_PI * fc / sample_rate
+            r = math.exp(-TWO_PI * bw / sample_rate)
+            impulse = torch.zeros(n); impulse[0] = 1
+            a = torch.zeros(n)
+            a[0] = 1
+            for i in range(1, n):
+                a[i] = 2 * r * math.cos(w) * a[i - 1] - r * r * a[i - 2] if i > 1 else 2 * r * math.cos(w) * a[i - 1]
+            b += a
+        signal = torch.fft.irfft(torch.fft.rfft(excitation) * torch.fft.rfft(b), n=n)
+        signal = signal / (signal.abs().max() + 1e-9)
+
     elif signal_type == 'chirp':
-        f0, f1 = 200.0, min(sample_rate / 2 - 500, 4000.0)
-        phase = TWO_PI * torch.cumsum(torch.linspace(f0, f1, n_samples), 0) / sample_rate
-        signal = torch.sin(phase)
-        
+        f0, f1 = 200.0, min(sample_rate / 2 - 200, 4000.0)
+        k = (f1 - f0) / duration
+        signal = torch.sin(two_pi_t * (f0 + 0.5 * k * t))     # analytic formula
+
     elif signal_type == 'noise':
-        signal = torch.randn(n_samples)
-        
-    elif signal_type == 'music':
-        # Simple chord progression (C major triad)
-        chord_freqs = [261.63, 329.63, 392.00]  # C4, E4, G4
-        signal = torch.zeros(n_samples)
-        for freq in chord_freqs:
-            signal += 0.3 * torch.sin(TWO_PI * freq * t)
-        # Add tremolo effect
-        signal *= 0.5 * (1 + torch.sin(TWO_PI * 2 * t))
-        
-    elif signal_type == 'alarm':
-        # Beeping alarm pattern
-        period_samples = int(sample_rate * 0.5)
-        beep = torch.sin(TWO_PI * 1500 * t)
-        mask = ((torch.arange(n_samples) // period_samples) % 2 == 0).float()
-        signal = beep * mask
-        
-    elif signal_type == 'impulse':
-        # Random impulse train
-        signal = torch.zeros(n_samples)
-        n_impulses = max(1, int(duration * 5))
-        for _ in range(n_impulses):
-            idx = random.randint(0, n_samples - 1)
-            signal[idx] = random.uniform(-1, 1)
-            
-    elif signal_type == 'engine_rev':
-        # Engine harmonics with RPM variation
-        f0 = random.uniform(50, 120)
-        signal = torch.zeros(n_samples)
-        rpm_modulation = 1 + 0.3 * torch.sin(TWO_PI * 0.5 * t)
-        
-        for harmonic in [1, 2, 3, 4, 5]:
-            amplitude = 1.0 / harmonic
-            signal += amplitude * torch.sin(TWO_PI * f0 * harmonic * t * rpm_modulation)
-            
+        signal = torch.randn(n)
+
     elif signal_type == 'pink_noise':
-        # Pink noise using simple IIR filter
-        white_noise = torch.randn(n_samples)
-        # Simplified pink noise filter coefficients
-        b = torch.tensor([0.049922, 0.095993, 0.050612, -0.004408])
-        a = torch.tensor([1.0, -2.494956, 2.017265, -0.522189])
-        
-        signal = torch.zeros(n_samples)
-        for i in range(3, n_samples):
-            signal[i] = (b[0] * white_noise[i] + b[1] * white_noise[i-1] + b[2] * white_noise[i-2] + b[3] * white_noise[i-3] - a[1] * signal[i-1] - a[2] * signal[i-2] - a[3] * signal[i-3])
+
+        # --- Voss–McCartney 1/f noise, stride-safe implementation -------
+
+        num_rows = int(math.ceil(math.log2(n)))  # enough octaves to cover N
+
+        noise = torch.zeros(n)
+
+        for r in range(num_rows):
+            step = 1 << r  # 1, 2, 4, 8, ...
+
+            # create ⌈N / step⌉ random values and up-sample by repeat
+
+            rand = torch.randn((n + step - 1) // step)
+
+            noise += rand.repeat_interleave(step)[:n]
+
+        signal = noise / num_rows  # normalise power
+
+    elif signal_type == 'alarm':
+        beep_len = int(sample_rate * 0.25)                     # 250 ms beeps
+        gap_len  = beep_len
+        f = 1400
+        pattern = torch.cat([torch.ones(beep_len), torch.zeros(gap_len)])
+        pattern = pattern.repeat(math.ceil(n / pattern.numel()))[:n]
+        signal = torch.sin(two_pi_t * f) * pattern
+
+    elif signal_type == 'impulse':
+        signal = torch.zeros(n)
+        step = HOP_LENGTH                                      # place on STFT frame
+        indices = torch.arange(step // 2, n, step)
+        signal[indices] = torch.sign(torch.randn(indices.size()))
+
+    elif signal_type == 'music':
+        freqs = [261.63, 329.63, 392.00]                       # C-major triad
+        trem = 0.6 + 0.4 * torch.sin(two_pi_t * 3)
+        signal = sum(torch.sin(two_pi_t * f) for f in freqs) * trem / len(freqs)
+
+    elif signal_type == 'engine_rev':
+        f0 = random.uniform(50, 120)
+        rev_curve = torch.cat([
+            torch.linspace(1.0, 3.0, int(n * 0.30)),
+            torch.ones(n - int(n * 0.30))
+        ])
+        signal = sum(torch.sin(two_pi_t * h * f0 * rev_curve) / h
+                     for h in range(1, 6))
+
     else:
-        raise ValueError(f"Unknown signal type '{signal_type}'")
-    
-    # Normalize signal
-    max_amplitude = torch.max(torch.abs(signal))
-    return signal / max_amplitude if max_amplitude > 1e-8 else torch.zeros_like(signal)
+        raise ValueError(f"Unknown signal type: {signal_type}")
+
+    # --- tidy-up --------------------------------------------------------
+    signal = _apply_fade(signal)                      # kill hard edges
+    signal = signal / (signal.abs().max() + 1e-9)     # full-scale
+    signal *= 0.5                                     # −6 dBFS head-room
+    return signal
 
 
 def create_stereo_scene(source: torch.Tensor, doa: float, d_mic: float, sample_rate: int, vehicle_env: Optional[str] = None, snr_db: float = 15) -> torch.Tensor:
     """Create stereo scene with proper TDOA and optional vehicle noise"""
     doa = np.clip(doa, 0, 180)
-    
+
     # Calculate time delay and apply to appropriate channel
     tau = d_mic * math.cos(math.radians(doa)) / SPEED_OF_SOUND
     delay_samples = tau * sample_rate
-    
+
     if delay_samples >= 0:
         left_channel = fractional_delay(source, delay_samples)
         right_channel = source.clone()
     else:
         left_channel = source.clone()
         right_channel = fractional_delay(source, -delay_samples)
-    
+
     # Create stereo signal
     stereo = torch.stack([left_channel, right_channel], 0)
-    
+
     # Add environment or basic noise
     if vehicle_env:
         stereo = apply_vehicle_environment(stereo, vehicle_env, snr_db)
     else:
         stereo += 0.01 * torch.randn_like(stereo)
-    
+
     # Final normalization
     max_amplitude = torch.max(torch.abs(stereo))
     return stereo * 0.95 / max_amplitude if max_amplitude > 0.95 else stereo
@@ -512,62 +547,62 @@ def run_systematic_tests(model: SoundSourceLocalize, tests_per_type: int = 10, v
     print("\n" + "=" * 80)
     print(" COMPREHENSIVE SOUND SOURCE LOCALIZATION TEST SUITE")
     print("=" * 80)
-    
+
     # Initialize random seeds for reproducibility
-    random.seed(42)
-    torch.manual_seed(42)
-    
+    random.seed(9527)
+    torch.manual_seed(9527)
+
     sound_types = list(SOUND_TYPES.keys())
     environments = list(VEHICLE_ENVIRONMENTS.keys()) + [None]
-    
+
     # Initialize results tracking
     results = {
         'total_tests': 0, 'correct_sector': 0, 'total_error': 0.0, 'failed_tests': 0,
         'by_env': {str(env): {'correct': 0, 'total': 0, 'failed': 0, 'errors': []} for env in environments},
         'confusion_matrix': torch.zeros(len(SECTORS), len(SECTORS), dtype=torch.long)
     }
-    
+
     test_id = 0
-    
+
     # Run tests for each sound type
     for sound_type in sound_types:
         for test_idx in range(tests_per_type):
             environment = environments[test_idx % len(environments)]
             env_key = str(environment)
             test_id += 1
-            
+
             try:
                 # Generate test parameters
                 sector_id = test_idx % len(SECTORS)
                 angle_min, angle_max = SECTORS[sector_id]
                 true_angle = random.uniform(angle_min + 0.1 * (angle_max - angle_min), angle_max - 0.1 * (angle_max - angle_min))
-                
+
                 # Generate test signal and scene
                 test_signal = generate_test_signal(sound_type, 2.0, SAMPLE_RATE)
                 snr_db = random.uniform(5, 15)
                 stereo_scene = create_stereo_scene(test_signal, true_angle, MIC_DISTANCE, SAMPLE_RATE, vehicle_env=environment, snr_db=snr_db)
-                
+
                 # Convert to int16 and run inference
                 stereo_scene = normalize_to_int16(stereo_scene.unsqueeze(0))
                 estimated_doa = model(stereo_scene[:, [0]], stereo_scene[:, [1]]).item()
-                
+
                 # Calculate metrics
                 angular_error = abs(estimated_doa - true_angle)
                 true_sector = sector_of(torch.tensor([true_angle]))[0].item()
                 estimated_sector = sector_of(torch.tensor([estimated_doa]))[0].item()
                 sector_correct = (true_sector == estimated_sector)
-                
+
                 # Update statistics
                 results['total_tests'] += 1
                 results['correct_sector'] += int(sector_correct)
                 results['total_error'] += angular_error
-                
+
                 env_stats = results['by_env'][env_key]
                 env_stats['total'] += 1
                 env_stats['correct'] += int(sector_correct)
                 env_stats['errors'].append(angular_error)
                 results['confusion_matrix'][true_sector, estimated_sector] += 1
-                
+
                 # Verbose output
                 if verbose:
                     true_sector_name = SECTOR_NAMES[true_sector]
@@ -575,17 +610,17 @@ def run_systematic_tests(model: SoundSourceLocalize, tests_per_type: int = 10, v
                     status = "✓" if sector_correct else "✗"
                     env_label = environment if environment else "clean"
                     snr_info = f"(SNR {snr_db:.1f}dB)" if environment else ""
-                    
+
                     print(f"[{test_id:3d}] {sound_type:<12} {env_label:<12} {status} "
                           f"{true_angle:6.1f}° → {estimated_doa:6.1f}° "
                           f"(err {angular_error:4.1f}°) [{true_sector_name} → {est_sector_name}] {snr_info}")
-                          
+
             except Exception as e:
                 results['failed_tests'] += 1
                 results['by_env'][env_key]['failed'] += 1
                 if verbose:
                     print(f"[{test_id:3d}] {sound_type:<12} {env_key:<12} ✗ FAILED: {e}")
-    
+
     # Print comprehensive summary
     _print_test_summary(results)
     return results
@@ -594,33 +629,33 @@ def run_systematic_tests(model: SoundSourceLocalize, tests_per_type: int = 10, v
 def _print_test_summary(results: Dict):
     """Print detailed test results summary"""
     successful_tests = results['total_tests']
-    
+
     if successful_tests > 0:
         accuracy = 100 * results['correct_sector'] / successful_tests
         mean_error = results['total_error'] / successful_tests
-        
+
         print("\n" + "=" * 80)
         print(f"TOTAL TESTS: {successful_tests}   FAILED: {results['failed_tests']}")
         print(f"SECTOR ACCURACY: {accuracy:.1f}%   MEAN ANGULAR ERROR: {mean_error:.1f}°")
         print("\nPERFORMANCE BY ENVIRONMENT:")
         print("Environment      Accuracy%    Mean Error°    Tests")
         print("-" * 50)
-        
+
         for env_key, stats in results['by_env'].items():
             if stats['total'] > 0:
                 env_accuracy = 100 * stats['correct'] / stats['total']
                 env_mean_error = sum(stats['errors']) / len(stats['errors']) if stats['errors'] else 0.0
                 env_label = env_key if env_key != "None" else "clean"
                 print(f"{env_label:<15} {env_accuracy:8.1f}  {env_mean_error:11.1f}   {stats['total']:5d}")
-        
+
         # Print confusion matrix
         print("\nCONFUSION MATRIX (True Sector \\ Estimated Sector):")
         col_width = max(len(name) for name in SECTOR_NAMES.values()) + 2
-        
+
         # Header row
         print(" " * col_width + "".join(f"{SECTOR_NAMES[j]:>{col_width}}" for j in range(len(SECTORS))))
         print("-" * (col_width * (len(SECTORS) + 1)))
-        
+
         # Data rows
         for i in range(len(SECTORS)):
             print(f"{SECTOR_NAMES[i]:<{col_width}}", end="")
@@ -641,26 +676,26 @@ def main() -> int:
         description="Advanced 2-microphone sound source localization system",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('--tests-per-type', type=int, default=10, help='Number of tests per sound type')
+    parser.add_argument('--tests-per-type', type=int, default=20, help='Number of tests per sound type')
     parser.add_argument('-q', '--quiet', action='store_true', help='Suppress verbose test output')
     args = parser.parse_args()
-    
+
     # Initialize STFT processor and localization model
     print("Initializing STFT processor and localization model...")
     custom_stft = STFT_Process(
-        model_type='stft_B', 
-        n_fft=NFFT, 
-        hop_len=HOP_LENGTH, 
-        win_length=WINDOW_LENGTH, 
-        max_frames=0, 
+        model_type='stft_B',
+        n_fft=NFFT,
+        hop_len=HOP_LENGTH,
+        win_length=WINDOW_LENGTH,
+        max_frames=0,
         window_type=WINDOW_TYPE
     ).eval()
-    
+
     model = SoundSourceLocalize(
-        SAMPLE_RATE, 
-        MIC_DISTANCE, 
-        ANGLE_GRID, 
-        NFFT, 
+        SAMPLE_RATE,
+        MIC_DISTANCE,
+        ANGLE_GRID,
+        NFFT,
         PRE_EMPHASIZE,
         ALPHA,
         BETA,
@@ -668,20 +703,20 @@ def main() -> int:
         MAX_SIGNAL_LENGTH,
         custom_stft
     ).to('cpu')
-    
+
     # Run comprehensive test suite
     print("Running comprehensive test suite...")
     test_results = run_systematic_tests(
-        model, 
-        tests_per_type=args.tests_per_type, 
+        model,
+        tests_per_type=args.tests_per_type,
         verbose=not args.quiet
     )
-    
+
     # Export model to ONNX format
     print(f"\nExporting model to ONNX format.")
     dummy_mic_0 = torch.ones((1, 1, MAX_SIGNAL_LENGTH), dtype=torch.int16)
     dummy_mic_1 = torch.ones((1, 1, MAX_SIGNAL_LENGTH), dtype=torch.int16)
-    
+
     torch.onnx.export(
         model,
         (dummy_mic_0, dummy_mic_1),
@@ -705,23 +740,23 @@ def main() -> int:
         verbose=False
     )
     print(f"\nModel successfully exported to {ONNX_MODEL_PATH}")
-    
+
     # Determine exit code based on test performance
     if test_results['total_tests'] > 0:
         accuracy = 100 * test_results['correct_sector'] / test_results['total_tests']
-        
+
         if test_results['failed_tests'] == 0 and accuracy > 80:
             exit_code = 0  # Excellent performance
         elif accuracy > 65:
             exit_code = 0  # Acceptable performance
         else:
             exit_code = 1  # Poor performance
-            
+
         print(f"\nTest suite completed with {accuracy:.1f}% accuracy")
     else:
         exit_code = 1
         print("\nTest suite failed - no successful tests!")
-    
+
     return exit_code
 
 
