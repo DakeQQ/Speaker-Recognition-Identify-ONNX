@@ -417,32 +417,35 @@ def generate_test_signal(signal_type: str,
         signal = torch.sin(two_pi_t * f)
 
     elif signal_type == 'speech':
-        # --- voiced excitation: impulse train with jitter ---------------
-        f0 = random.uniform(100, 230)                         # base pitch
-        jitter = 0.03                                         # 3 % jitter
+        # 1. Voiced excitation: impulse train with jitter (same as before)
+        f0 = random.uniform(100, 230)      # base pitch
+        jitter = 0.03                      # 3 % jitter
         pulse_period = int(sample_rate / f0)
         excitation = torch.zeros_like(t)
-        idx = torch.arange(0, n, pulse_period)
-        idx = idx + (torch.randn_like(idx, dtype=torch.float32)
-                     * jitter * pulse_period).long()
-        idx = idx.clamp(0, n - 1).unique(sorted=True)
+        idx = torch.arange(0, n, pulse_period, dtype=torch.long)
+        jitter_samples = (torch.randn_like(idx, dtype=torch.float32) * jitter * pulse_period).long()
+        idx = (idx + jitter_samples).clamp(0, n - 1).unique(sorted=True)
         excitation[idx] = 1.0
 
-        # --- simple 3-formant filter (rough male/female average) -------
-        formants = [(500,  60), (1500, 90), (2500, 120)]
-        b = torch.zeros(n)
+        # 2. Vocal tract filter: Sum of formant resonators in freq domain
+        n_fft = 2 * (n // 2 + 1) # Ensure FFT size is appropriate
+        freqs = torch.fft.rfftfreq(n_fft, 1./sample_rate)
+        
+        # Typical formant frequencies (Hz) and bandwidths (Hz) for a vowel
+        formants = [(500, 60), (1500, 90), (2500, 120), (3500, 150)]
+        vocal_tract_response = torch.zeros_like(freqs, dtype=torch.complex64)
+
         for fc, bw in formants:
-            # 1-pole resonance in the frequency domain
-            w = TWO_PI * fc / sample_rate
-            r = math.exp(-TWO_PI * bw / sample_rate)
-            impulse = torch.zeros(n); impulse[0] = 1
-            a = torch.zeros(n)
-            a[0] = 1
-            for i in range(1, n):
-                a[i] = 2 * r * math.cos(w) * a[i - 1] - r * r * a[i - 2] if i > 1 else 2 * r * math.cos(w) * a[i - 1]
-            b += a
-        signal = torch.fft.irfft(torch.fft.rfft(excitation) * torch.fft.rfft(b), n=n)
-        signal = signal / (signal.abs().max() + 1e-9)
+            # Create a simple resonant peak for each formant (Lorentzian shape)
+            resonance = (bw / 2)**2 / ((freqs - fc)**2 + (bw / 2)**2)
+            vocal_tract_response += resonance
+            
+        # 3. Apply filter to excitation via frequency domain convolution
+        excitation_fft = torch.fft.rfft(excitation, n=n_fft)
+        signal_fft = excitation_fft * vocal_tract_response
+        signal = torch.fft.irfft(signal_fft, n=n_fft)[:n] # inverse FFT and trim to original length
+        
+        signal = signal / (signal.abs().max() + 1e-6)
 
     elif signal_type == 'chirp':
         f0, f1 = 200.0, min(sample_rate / 2 - 200, 4000.0)
@@ -453,22 +456,16 @@ def generate_test_signal(signal_type: str,
         signal = torch.randn(n)
 
     elif signal_type == 'pink_noise':
-
-        # --- Voss–McCartney 1/f noise, stride-safe implementation -------
-
+        # --- Voss–McCartney 1/f noise algorithm ---
+        # This algorithm generates pink noise by summing several octaves of
+        # up-sampled white noise.
         num_rows = int(math.ceil(math.log2(n)))  # enough octaves to cover N
-
         noise = torch.zeros(n)
-
         for r in range(num_rows):
             step = 1 << r  # 1, 2, 4, 8, ...
-
-            # create ⌈N / step⌉ random values and up-sample by repeat
-
+            # Create ⌈N / step⌉ random values and up-sample by repeating
             rand = torch.randn((n + step - 1) // step)
-
             noise += rand.repeat_interleave(step)[:n]
-
         signal = noise / num_rows  # normalise power
 
     elif signal_type == 'alarm':
@@ -494,7 +491,7 @@ def generate_test_signal(signal_type: str,
         f0 = random.uniform(50, 120)
         rev_curve = torch.cat([
             torch.linspace(1.0, 3.0, int(n * 0.30)),
-            torch.ones(n - int(n * 0.30))
+            3.0 * torch.ones(n - int(n * 0.30))  # Hold revs
         ])
         signal = sum(torch.sin(two_pi_t * h * f0 * rev_curve) / h
                      for h in range(1, 6))
