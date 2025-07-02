@@ -38,7 +38,7 @@ ONNX_MODEL_PATH = "./SoundSourceLocalize.onnx"
 TWO_PI = 2.0 * math.pi                  # Pre-calculated 2π
 
 # Angle grid for DOA estimation (0° = left, 90° = front, 180° = right)
-ANGLE_GRID = torch.arange(0, 181, step=1, dtype=torch.float32)
+ANGLE_GRID = torch.arange(0, 181, step=1, dtype=torch.uint8)
 
 # Sector definitions for direction classification
 
@@ -310,33 +310,33 @@ class SoundSourceLocalize(nn.Module):
         combined_weight = (spatial_weight * freq_weight * aliasing_weight).unsqueeze(0)
         self.register_buffer('freq_weight', combined_weight / (combined_weight.sum() + 1e-6))
 
-    def _enhanced_mvdr_spectrum(self, p0: torch.Tensor, p1: torch.Tensor, r01: torch.Tensor, i01: torch.Tensor) -> torch.Tensor:
+    def _enhanced_mvdr_spectrum(self, p_L: torch.Tensor, p_R: torch.Tensor, r_LR: torch.Tensor, i_LR: torch.Tensor) -> torch.Tensor:
         """Enhanced MVDR spectrum calculation with multiple integration strategies"""
         # Temporal smoothing with pre-calculated exponential weights
-        weights = self.temporal_weights[..., :p0.shape[-1]]
+        weights = self.temporal_weights[..., :p_L.shape[-1]]
 
         # Compute smoothed covariance matrix elements
-        R00 = (p0 * weights).sum(dim=2)
-        R11 = (p1 * weights).sum(dim=2)
-        R01r = (r01 * weights).sum(dim=2)
-        R01i = (i01 * weights).sum(dim=2)
+        R_LL = (p_L * weights).sum(dim=2)
+        R_RR = (p_R * weights).sum(dim=2)
+        R_LR_r = (r_LR * weights).sum(dim=2)
+        R_LR_i = (i_LR * weights).sum(dim=2)
 
         # Diagonal loading for numerical stability
-        trace = (R00 + R11) * 0.5
+        trace = (R_LL + R_RR) * 0.5
 
         # Robust matrix inversion with conditioning
-        determinant = R00 * R11 - (R01r ** 2 + R01i ** 2)
+        determinant = R_LL * R_RR - (R_LR_r ** 2 + R_LR_i ** 2)
         determinant = determinant + 1e-6 * trace  # Diagonal loading
 
         inv_det = 1.0 / determinant
-        iR00 = R11 * inv_det
-        iR11 = R00 * inv_det
-        iR01r = -R01r * inv_det  # Note the negative sign
-        iR01i = -R01i * inv_det
+        iR_LL = R_RR * inv_det
+        iR_RR = R_LL * inv_det
+        iR_LR_r = -R_LR_r * inv_det  # Note the negative sign
+        iR_LR_i = -R_LR_i * inv_det
 
         # MVDR beamformer power calculation for all angles
-        quadratic_form = iR01r * self.steer_real + iR01i * self.steer_imag
-        quadratic_form = iR00 + iR11 + quadratic_form + quadratic_form
+        quadratic_form = iR_LR_r * self.steer_real + iR_LR_i * self.steer_imag
+        quadratic_form = iR_LL + iR_RR + quadratic_form + quadratic_form
 
         mvdr_power = 1.0 / (quadratic_form + 1e-6)  # Avoid division by zero
 
@@ -355,32 +355,32 @@ class SoundSourceLocalize(nn.Module):
 
         return final_score
 
-    def forward(self, mic_wav_0: torch.Tensor, mic_wav_1: torch.Tensor) -> torch.Tensor:
+    def forward(self, mic_wav_L: torch.ShortTensor, mic_wav_R: torch.ShortTensor) -> torch.Tensor:
         """Forward pass: convert audio to DOA estimate"""
         # Fused preprocessing: normalization, DC removal, pre-emphasis
-        mic_wav_0 = mic_wav_0 * self.inv_int16
-        mic_wav_1 = mic_wav_1 * self.inv_int16
+        mic_wav_L = mic_wav_L * self.inv_int16
+        mic_wav_R = mic_wav_R * self.inv_int16
 
         # Remove DC offset
-        mic_wav_0 = mic_wav_0 - torch.mean(mic_wav_0, dim=-1, keepdim=True)
-        mic_wav_1 = mic_wav_1 - torch.mean(mic_wav_1, dim=-1, keepdim=True)
+        mic_wav_L = mic_wav_L - torch.mean(mic_wav_L, dim=-1, keepdim=True)
+        mic_wav_R = mic_wav_R - torch.mean(mic_wav_R, dim=-1, keepdim=True)
 
         # Apply pre-emphasis filter
-        mic_wav_0 = torch.cat([mic_wav_0[:, :, :1], mic_wav_0[:, :, 1:] - self.pre_emphasis * mic_wav_0[:, :, :-1]], dim=-1)
-        mic_wav_1 = torch.cat([mic_wav_1[:, :, :1], mic_wav_1[:, :, 1:] - self.pre_emphasis * mic_wav_1[:, :, :-1]], dim=-1)
+        mic_wav_L = torch.cat([mic_wav_L[:, :, :1], mic_wav_L[:, :, 1:] - self.pre_emphasis * mic_wav_L[:, :, :-1]], dim=-1)
+        mic_wav_R = torch.cat([mic_wav_R[:, :, :1], mic_wav_R[:, :, 1:] - self.pre_emphasis * mic_wav_R[:, :, :-1]], dim=-1)
 
         # STFT computation
-        r0, i0 = self.custom_stft(mic_wav_0, 'constant')
-        r1, i1 = self.custom_stft(mic_wav_1, 'constant')
+        r_L, i_L = self.custom_stft(mic_wav_L, 'constant')
+        r_R, i_R = self.custom_stft(mic_wav_R, 'constant')
 
         # Compute power and cross-spectra
-        p0 = r0 * r0 + i0 * i0
-        p1 = r1 * r1 + i1 * i1
-        r01 = r0 * r1 + i0 * i1
-        i01 = i0 * r1 - r0 * i1
+        p_L = r_L * r_L + i_L * i_L
+        p_R = r_R * r_R + i_R * i_R
+        r_LR = r_L * r_R + i_L * i_R
+        i_LR = i_L * r_R - r_L * i_R
 
         # Enhanced MVDR processing
-        mvdr_scores = self._enhanced_mvdr_spectrum(p0, p1, r01, i01)
+        mvdr_scores = self._enhanced_mvdr_spectrum(p_L, p_R, r_LR, i_LR)
 
         # Return estimated angle
         max_indices = torch.argmax(mvdr_scores, dim=-1)
@@ -581,7 +581,7 @@ def run_systematic_tests(model: SoundSourceLocalize, tests_per_type: int = 10, v
 
                 # Convert to int16 and run inference
                 stereo_scene = normalize_to_int16(stereo_scene.unsqueeze(0))
-                estimated_doa = model(stereo_scene[:, [0]], stereo_scene[:, [1]]).item()
+                estimated_doa = float(model(stereo_scene[:, [0]], stereo_scene[:, [1]]).item())
 
                 # Calculate metrics
                 angular_error = abs(estimated_doa - true_angle)
@@ -711,18 +711,18 @@ def main() -> int:
 
     # Export model to ONNX format
     print(f"\nExporting model to ONNX format.")
-    dummy_mic_0 = torch.ones((1, 1, MAX_SIGNAL_LENGTH), dtype=torch.int16)
-    dummy_mic_1 = torch.ones((1, 1, MAX_SIGNAL_LENGTH), dtype=torch.int16)
+    dummy_mic_L = torch.ones((1, 1, MAX_SIGNAL_LENGTH), dtype=torch.int16)
+    dummy_mic_R = torch.ones((1, 1, MAX_SIGNAL_LENGTH), dtype=torch.int16)
 
     torch.onnx.export(
         model,
-        (dummy_mic_0, dummy_mic_1),
+        (dummy_mic_L, dummy_mic_R),
         ONNX_MODEL_PATH,
-        input_names=['audio_mic_0', 'audio_mic_1'],
+        input_names=['audio_mic_L', 'audio_mic_R'],
         output_names=['estimated_angle_degrees'],
         dynamic_axes={
-            'audio_mic_0': {2: 'audio_length'},
-            'audio_mic_1': {2: 'audio_length'},
+            'audio_mic_L': {2: 'audio_length'},
+            'audio_mic_R': {2: 'audio_length'},
         } if DYNAMIC_AXES else None,
         opset_version=17,
         do_constant_folding=True
