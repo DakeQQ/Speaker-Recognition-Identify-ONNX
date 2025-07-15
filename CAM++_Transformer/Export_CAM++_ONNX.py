@@ -71,7 +71,7 @@ class CAMPPLUS(torch.nn.Module):
         super(CAMPPLUS, self).__init__()
         self.campplus = campplus
         self.stft_model = stft_model
-        self.pre_emphasis = pre_emphasis
+        self.pre_emphasis = float(pre_emphasis)
         self.fbank = (torchaudio.functional.melscale_fbanks(nfft_stft // 2 + 1, 20, sample_rate // 2, n_mels, sample_rate, None,'htk')).transpose(0, 1).unsqueeze(0)
         self.nfft_stft = nfft_stft
         self.inv_int16 = float(1.0 / 32768.0)
@@ -83,7 +83,8 @@ class CAMPPLUS(torch.nn.Module):
     def forward(self, audio, voice_embed_x, voice_embed_y, control_factor):
         audio = audio.float() * self.inv_int16
         audio = audio - torch.mean(audio)  # Remove DC Offset
-        audio = torch.cat((audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]), dim=-1)  # Pre Emphasize
+        if self.pre_emphasis > 0:
+            audio = torch.cat([audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]], dim=-1)
         real_part, imag_part = self.stft_model(audio, 'constant')
         mel_features = torch.matmul(self.fbank, real_part * real_part + imag_part * imag_part).clamp(min=1e-5).log()
         mel_features = mel_features - mel_features.mean(dim=-1, keepdim=True)
