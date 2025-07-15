@@ -46,11 +46,11 @@ def normalize_to_int16(audio):
 
 
 class ERES2NETV2(torch.nn.Module):
-    def __init__(self, eres2netv2, stft_model, nfft_stft, stft_signal_len, n_mels, sample_rate, pre_emphasis):
+    def __init__(self, eres2netv2, stft_model, nfft_stft, n_mels, sample_rate, pre_emphasis):
         super(ERES2NETV2, self).__init__()
         self.eres2netv2 = eres2netv2
         self.stft_model = stft_model
-        self.pre_emphasis = pre_emphasis
+        self.pre_emphasis = float(pre_emphasis)
         self.cos_similarity = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
         self.fbank = (torchaudio.functional.melscale_fbanks(nfft_stft // 2 + 1, 20, sample_rate // 2, n_mels, sample_rate, None,'htk')).transpose(0, 1).unsqueeze(0)
         self.nfft_stft = nfft_stft
@@ -59,7 +59,8 @@ class ERES2NETV2(torch.nn.Module):
     def forward(self, audio, saved_embed, num_speakers):
         audio = audio.float() * self.inv_int16
         audio = audio - torch.mean(audio)  # Remove DC Offset
-        audio = torch.cat((audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]), dim=-1)  # Pre Emphasize
+        if self.pre_emphasis > 0:
+            audio = torch.cat([audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]], dim=-1)
         real_part, imag_part = self.stft_model(audio, 'constant')
         mel_features = torch.matmul(self.fbank, real_part * real_part + imag_part * imag_part).clamp(min=1e-5).log()
         mel_features = mel_features - mel_features.mean(dim=-1, keepdim=True)
@@ -77,7 +78,7 @@ with torch.inference_mode():
         disable_update=True,
         device="cpu",
     ).embedding_model.eval()
-    eres2netv2 = ERES2NETV2(model, custom_stft, NFFT_STFT, STFT_SIGNAL_LENGTH, N_MELS, SAMPLE_RATE, PRE_EMPHASIZE)
+    eres2netv2 = ERES2NETV2(model, custom_stft, NFFT_STFT, N_MELS, SAMPLE_RATE, PRE_EMPHASIZE)
     audio = torch.ones((1, 1, INPUT_AUDIO_LENGTH), dtype=torch.int16)
     saved_embed = torch.randn((MAX_SPEAKERS, model.embed_dim), dtype=torch.float32)
     num_speakers = torch.tensor([1], dtype=torch.int64)
