@@ -67,7 +67,7 @@ class PosEncoding(torch.nn.Module):
 
 
 class CAMPPLUS(torch.nn.Module):
-    def __init__(self, campplus, stft_model, nfft_stft, stft_signal_len, n_mels, sample_rate, pre_emphasis):
+    def __init__(self, campplus, stft_model, nfft_stft, n_mels, sample_rate, pre_emphasis):
         super(CAMPPLUS, self).__init__()
         self.campplus = campplus
         self.stft_model = stft_model
@@ -104,7 +104,7 @@ with torch.inference_mode():
         disable_update=True,
         device="cpu"
     ).eval()
-    campplus = CAMPPLUS(model, custom_stft, NFFT_STFT, STFT_SIGNAL_LENGTH, N_MELS, SAMPLE_RATE, PRE_EMPHASIZE)
+    campplus = CAMPPLUS(model, custom_stft, NFFT_STFT, N_MELS, SAMPLE_RATE, PRE_EMPHASIZE)
     audio = torch.ones((1, 1, INPUT_AUDIO_LENGTH), dtype=torch.int16)
     voice_embed_x = torch.ones((1, 1, VOICE_EMBED_DIM), dtype=torch.float32)
     voice_embed_y = torch.ones((1, 1, VOICE_EMBED_DIM), dtype=torch.float32)
