@@ -29,12 +29,9 @@ MAX_SIGNAL_LENGTH = 32000               # Maximum signal length to process
 WINDOW_TYPE = 'kaiser'                  # Window function type for STFT
 
 # --- CORE ALGORITHM REVISION ---
-# Adjusted weights to improve accuracy. The original weights (A=0.3, B=0.6, G=0.1)
-# heavily favored the simple arithmetic mean. The new weights give more influence
-# to the peak-weighted score (GAMMA), which is more robust in noisy and complex
 # scenes by focusing on frequency bins with clear directional information.
 ALPHA = 0.2                             # Geometric mean score (sensitive to nulls, good for broadband)
-BETA = 0.5                              # Arithmetic mean score (robust baseline)
+BETA = 0.6                              # Arithmetic mean score (robust baseline)
 GAMMA = 0.2                             # Peak-weighted score (improves accuracy with interferers)
 
 # Model export settings
