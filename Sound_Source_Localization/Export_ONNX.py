@@ -44,6 +44,19 @@ TWO_PI = 2.0 * math.pi                  # Pre-calculated 2π
 ANGLE_GRID = torch.arange(0, 181, step=1, dtype=torch.float32)
 
 # Sector definitions for direction classification
+"""
+                             Cabin
+========================= L ⊙-MIC-⊙ R ========================
+|                              |                             |
+|     Front-Left (0°-45°)      |    Front-Right (135°-180°)  |
+|                              |                             |
+==============================================================
+|                              |                             |
+|     Rear-Left (45°-90°)      |    Rear-Right (90°-135°)    |
+|                              |                             |
+==============================================================
+"""
+
 SECTORS = {
     0: (0.0, 45.0),     # Front-Left
     1: (45.0, 90.0),    # Rear-Left
