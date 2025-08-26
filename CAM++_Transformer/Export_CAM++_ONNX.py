@@ -19,7 +19,7 @@ ORT_Accelerate_Providers = []                               # If you have accele
                                                             # else keep empty.
 DYNAMIC_AXES = True                                         # The default dynamic_axes is the input audio length. Note that some providers only support static axes.
 INPUT_AUDIO_LENGTH = 160000                                 # The maximum input audio length.
-WINDOW_TYPE = 'hann'                                        # Type of window function used in the STFT
+WINDOW_TYPE = 'hamming'                                     # Type of window function used in the STFT
 N_MELS = 80                                                 # Number of Mel bands to generate in the Mel-spectrogram, edit it carefully.
 NFFT_STFT = 512                                             # Number of FFT components for the STFT process, edit it carefully.
 WINDOW_LENGTH = 400                                         # Length of windowing, edit it carefully.
@@ -74,19 +74,18 @@ class CAMPPLUS(torch.nn.Module):
         self.pre_emphasis = float(pre_emphasis)
         self.fbank = (torchaudio.functional.melscale_fbanks(nfft_stft // 2 + 1, 20, sample_rate // 2, n_mels, sample_rate, None,'htk')).transpose(0, 1).unsqueeze(0)
         self.nfft_stft = nfft_stft
-        self.inv_int16 = float(1.0 / 32768.0)
         embed = torch.zeros((1, 1, campplus.model_config['anchor_size']), dtype=torch.int8)
         embed[:, :, 1::2] = 1
         self.anchors = torch.cat((embed, 1 - embed), dim=0)
         self.campplus.backend.pos_enc_plus = PosEncoding(2048, 256)
 
     def forward(self, audio, voice_embed_x, voice_embed_y, control_factor):
-        audio = audio.float() * self.inv_int16
+        audio = audio.float()
         audio = audio - torch.mean(audio)  # Remove DC Offset
         if self.pre_emphasis > 0:
             audio = torch.cat([audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]], dim=-1)
         real_part, imag_part = self.stft_model(audio, 'constant')
-        mel_features = torch.matmul(self.fbank, real_part * real_part + imag_part * imag_part).clamp(min=1e-5).log()
+        mel_features = torch.matmul(self.fbank, real_part * real_part + imag_part * imag_part).clamp(min=1e-6).log()
         mel_features = mel_features - mel_features.mean(dim=-1, keepdim=True)
         anchors = torch.cat((voice_embed_x, voice_embed_y), dim=0) * control_factor + (self.anchors * (1 - control_factor)).float()
         output = self.campplus(mel_features, anchors)
