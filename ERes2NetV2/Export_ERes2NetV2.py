@@ -18,7 +18,7 @@ ORT_Accelerate_Providers = []                               # If you have accele
                                                             # else keep empty.
 DYNAMIC_AXES = True                                         # The default dynamic_axes is the input audio length. Note that some providers only support static axes.
 INPUT_AUDIO_LENGTH = 160000                                 # The maximum input audio length.
-WINDOW_TYPE = 'hann'                                        # Type of window function used in the STFT
+WINDOW_TYPE = 'hamming'                                     # Type of window function used in the STFT
 N_MELS = 80                                                 # Number of Mel bands to generate in the Mel-spectrogram, edit it carefully.
 NFFT_STFT = 512                                             # Number of FFT components for the STFT process, edit it carefully.
 WINDOW_LENGTH = 400                                         # Length of windowing, edit it carefully.
@@ -54,10 +54,9 @@ class ERES2NETV2(torch.nn.Module):
         self.cos_similarity = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
         self.fbank = (torchaudio.functional.melscale_fbanks(nfft_stft // 2 + 1, 20, sample_rate // 2, n_mels, sample_rate, None,'htk')).transpose(0, 1).unsqueeze(0)
         self.nfft_stft = nfft_stft
-        self.inv_int16 = float(1.0 / 32768.0)
 
     def forward(self, audio, saved_embed, num_speakers):
-        audio = audio.float() * self.inv_int16
+        audio = audio.float()
         audio = audio - torch.mean(audio)  # Remove DC Offset
         if self.pre_emphasis > 0:
             audio = torch.cat([audio[:, :, :1], audio[:, :, 1:] - self.pre_emphasis * audio[:, :, :-1]], dim=-1)
