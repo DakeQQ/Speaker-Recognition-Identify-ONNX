@@ -89,7 +89,7 @@ class CAMPPLUS(torch.nn.Module):
         mel_features = mel_features - mel_features.mean(dim=-1, keepdim=True)
         anchors = torch.cat((voice_embed_x, voice_embed_y), dim=0) * control_factor + (self.anchors * (1 - control_factor)).float()
         output = self.campplus(mel_features, anchors)
-        argmax_values = output.argmax(dim=-1).int()
+        argmax_values = output.argmax(dim=-1)
         output = torch.nonzero(argmax_values[1:] - argmax_values[:-1]).squeeze(-1)
         return output.shape[0].int(), output.int()
 
