@@ -92,7 +92,8 @@ with torch.inference_mode():
             'audio': {2: 'audio_len'},
             'saved_embed': {0: 'max_speakers'}
         } if DYNAMIC_AXES else None,
-        opset_version=17
+        opset_version=17,
+        dynamo=False
     )
     del model
     del eres2netv2
