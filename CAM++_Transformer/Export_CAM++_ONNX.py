@@ -119,7 +119,8 @@ with torch.inference_mode():
             'audio': {2: 'audio_len'},
             'output': {0: 'output_len'}
         } if DYNAMIC_AXES else None,
-        opset_version=17
+        opset_version=17,
+        dynamo=False
     )
     del model
     del campplus
