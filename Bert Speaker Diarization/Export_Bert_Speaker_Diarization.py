@@ -80,6 +80,7 @@ with torch.inference_mode():
                           'turn_indices': {-1: 'turn_indices_len'}
                       } if DYNAMIC_AXES else {'turn_indices': {-1: 'turn_indices_len'}},
                       do_constant_folding=True,
+                      dynamo=False,
                       opset_version=17)
 del model
 del input_ids
