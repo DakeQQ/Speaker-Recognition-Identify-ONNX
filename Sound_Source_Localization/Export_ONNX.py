@@ -1575,7 +1575,7 @@ def main() -> int:
                 input_names=['audio_mic_L', 'audio_mic_R'],
                 output_names=['estimated_angle_degrees'],
                 dynamic_axes={'audio_mic_L': {2: 'audio_length'}, 'audio_mic_R': {2: 'audio_length'}} if DYNAMIC_AXES else None,
-                opset_version=17, do_constant_folding=True
+                opset_version=17, do_constant_folding=True, dynamo=False
             )
         slim(
             model=ONNX_MODEL_PATH, output_model=ONNX_MODEL_PATH,
